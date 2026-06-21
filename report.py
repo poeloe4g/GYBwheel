@@ -6,8 +6,14 @@ table to console and CSV. Notion/Telegram push left as optional stubs.
 from __future__ import annotations
 
 import csv
+import json
+import math
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+SCHEMA_VERSION = 1
 
 CSV_COLUMNS = [
     "ticker", "sector", "expiration", "dte", "strike", "mid", "abs_delta",
@@ -72,6 +78,77 @@ def write_csv(rows: list[dict[str, Any]], path: str | Path) -> Path:
         writer.writeheader()
         for r in rows:
             writer.writerow(r)
+    return path
+
+
+# --- JSON snapshot (dashboard feed) ----------------------------------------
+def _json_safe(obj: Any) -> Any:
+    """Recursively replace non-finite floats (inf/nan) with None.
+
+    ``json.dump`` would emit ``Infinity``/``NaN`` literals, which the browser's
+    ``JSON.parse`` rejects. ``min_account_for_1_contract`` can be ``math.inf``.
+    """
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
+def write_json(
+    header: dict[str, Any],
+    rows: list[dict[str, Any]],
+    regime: Any,
+    config: dict[str, Any],
+    path: str | Path,
+    *,
+    meta_extra: dict[str, Any] | None = None,
+    generated_at: datetime | None = None,
+) -> Path:
+    """Write a self-contained run snapshot the static dashboard consumes.
+
+    Reuses the already-built ``header`` (``build_header``), the ranked ``rows``
+    (full dicts, not the trimmed CSV columns), and the ``Regime`` dataclass.
+    Written atomically (temp + ``os.replace``) like ``cache.DiskCache.set``.
+    """
+    now = generated_at or datetime.now(timezone.utc)
+    quality = config.get("quality", {})
+    meta = {
+        "generated_at": now.isoformat(timespec="seconds"),
+        "run_date": now.date().isoformat(),
+        "candidate_count": len(rows),
+    }
+    if meta_extra:
+        meta.update(meta_extra)
+
+    doc = {
+        "schema_version": SCHEMA_VERSION,
+        "meta": meta,
+        "regime": {
+            "light": regime.light,
+            "tripped": regime.tripped,
+            "signals": dict(regime.signals),
+        },
+        "header": header,
+        "thresholds": {
+            "dte": config.get("dte"),
+            "delta": config.get("delta"),
+            "scoring_mode": config.get("scoring", {}).get("mode"),
+            "regime": config.get("regime"),
+            "account": config.get("account"),
+            "avoid_earnings_before_expiry": quality.get("avoid_earnings_before_expiry"),
+        },
+        "rows": rows,
+    }
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with tmp.open("w", encoding="utf-8") as fh:
+        json.dump(_json_safe(doc), fh, indent=2)
+    os.replace(tmp, path)
     return path
 
 

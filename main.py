@@ -38,6 +38,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--config", default="config.yaml", help="Path to config.yaml")
     p.add_argument("--positions", default="positions.yaml", help="Path to positions.yaml (B3)")
     p.add_argument("--output", default="candidates.csv", help="CSV output path")
+    p.add_argument("--json-out", help="Write a run snapshot JSON here (dashboard feed).")
     p.add_argument("--tickers", help="Comma-separated tickers to screen (overrides default seed)")
     p.add_argument("--sp500-file", help="File of S&P 500 tickers (one per line) for breadth")
     p.add_argument("--max-rows", type=int, default=25, help="Max ranked rows to display")
@@ -71,6 +72,16 @@ def run(args: argparse.Namespace) -> int:
         header = report_mod.build_header(regime, account, config)
         print(report_mod.render_console(header, []))
         print("\nRED regime — manage existing positions only. No new screening.")
+        if args.json_out:
+            report_mod.write_json(
+                header, [], regime, config, args.json_out,
+                meta_extra={
+                    "tradier_env": secrets.tradier_env,
+                    "tickers_screened": [],
+                    "breadth_evaluated": bool(members),
+                    "max_rows": args.max_rows,
+                },
+            )
         return 0
 
     # 2/3. Universe --------------------------------------------------------
@@ -133,6 +144,17 @@ def run(args: argparse.Namespace) -> int:
     print(report_mod.render_console(header, ranked))
     out = report_mod.write_csv(ranked, args.output)
     print(f"\nWrote {len(ranked)} rows to {out}")
+    if args.json_out:
+        jout = report_mod.write_json(
+            header, ranked, regime, config, args.json_out,
+            meta_extra={
+                "tradier_env": secrets.tradier_env,
+                "tickers_screened": candidates,
+                "breadth_evaluated": bool(members),
+                "max_rows": args.max_rows,
+            },
+        )
+        print(f"Wrote run snapshot to {jout}")
     return 0
 
 

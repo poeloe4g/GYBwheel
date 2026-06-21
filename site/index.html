@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GYBwheel — BORING Wheel Screener</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+  <header class="site-header">
+    <h1>GYBwheel — BORING Wheel Screener</h1>
+    <p class="tagline">Paper-only cash-secured-put candidate screener. Not investment advice.</p>
+  </header>
+
+  <main>
+    <div id="demo-notice" class="notice hidden">
+      Showing <strong>demo seed data</strong>. The first scheduled screener run will replace this.
+    </div>
+    <div id="error" class="notice error hidden"></div>
+
+    <!-- Regime banner -->
+    <section id="regime" class="regime-banner regime-unknown">
+      <div class="regime-light">—</div>
+      <div class="regime-meta">
+        <div id="regime-tripped" class="regime-tripped"></div>
+        <div id="generated-at" class="muted"></div>
+      </div>
+    </section>
+
+    <!-- Capital summary -->
+    <section class="cards" id="capital-cards"></section>
+
+    <!-- Run picker -->
+    <section class="picker-row">
+      <label for="run-picker">Run date:</label>
+      <select id="run-picker"></select>
+    </section>
+
+    <!-- Per-run charts -->
+    <section class="chart-grid">
+      <figure class="chart-card"><figcaption>Top candidates by score</figcaption>
+        <canvas id="chart-top-score"></canvas></figure>
+      <figure class="chart-card"><figcaption>Annualized yield vs. distance to strike</figcaption>
+        <canvas id="chart-yield-distance"></canvas></figure>
+      <figure class="chart-card"><figcaption>Deployable collateral by sector</figcaption>
+        <canvas id="chart-sector"></canvas></figure>
+      <figure class="chart-card"><figcaption>Capital deployed</figcaption>
+        <canvas id="chart-deployed"></canvas></figure>
+    </section>
+
+    <!-- Candidates table -->
+    <section>
+      <h2>Ranked candidates</h2>
+      <div class="table-wrap">
+        <table id="candidates">
+          <thead>
+            <tr>
+              <th data-key="ticker">Ticker</th>
+              <th data-key="sector">Sector</th>
+              <th data-key="expiration">Exp</th>
+              <th data-key="dte" class="num">DTE</th>
+              <th data-key="strike" class="num">Strike</th>
+              <th data-key="mid" class="num">Mid</th>
+              <th data-key="abs_delta" class="num">|Δ|</th>
+              <th data-key="annualized_yield" class="num">Ann %</th>
+              <th data-key="distance_to_strike" class="num">Dist %</th>
+              <th data-key="score" class="num">Score</th>
+              <th data-key="max_contracts" class="num">Max</th>
+              <th data-key="flags">Flags</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- History charts -->
+    <section>
+      <h2>History</h2>
+      <div class="chart-grid">
+        <figure class="chart-card"><figcaption>Regime over time</figcaption>
+          <canvas id="hist-regime"></canvas></figure>
+        <figure class="chart-card"><figcaption>Top score over time</figcaption>
+          <canvas id="hist-top-score"></canvas></figure>
+        <figure class="chart-card"><figcaption>Qualifying candidates over time</figcaption>
+          <canvas id="hist-count"></canvas></figure>
+        <figure class="chart-card"><figcaption>% deployed over time</figcaption>
+          <canvas id="hist-deployed"></canvas></figure>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer muted">
+    <span id="thresholds-summary"></span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

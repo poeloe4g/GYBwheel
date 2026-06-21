@@ -58,10 +58,44 @@ Missing `TRADIER_TOKEN` produces a clear, actionable error. Secrets live in
 | `main.py` | orchestration + CLI (`--paper` default) |
 | `tests/` | offline fixture-based tests (no live network) |
 
+## Dashboard (GitHub Actions → GitHub Pages)
+
+The screener can run unattended in CI and publish its results — recommendations,
+analysis, and graphs — to a static webpage.
+
+- **Compute:** `.github/workflows/screen.yml` runs the screener on a weekday-evening
+  cron (and on-demand via *Run workflow*), then commits a dated JSON snapshot.
+- **View:** a no-build static site in `site/` (Chart.js via CDN) reads the JSON and
+  renders the regime banner, capital summary, a ranked candidates table, per-run
+  charts (top scores, yield-vs-distance, sector allocation, deployment gauge), and
+  history trends (regime, score, candidate count, % deployed over time).
+
+`main.py --json-out PATH` writes one self-contained run snapshot (regime, header,
+thresholds, full candidate rows). `scripts/build_index.py` rebuilds
+`site/data/index.json` + `latest.json` from `site/data/runs/*.json`.
+
+### One-time repo setup
+1. **Settings → Pages → Source = "GitHub Actions".**
+2. **Settings → Secrets and variables → Actions:** add `TRADIER_TOKEN` (required;
+   optionally `TRADIER_ENV`, `FMP_API_KEY`).
+3. **Settings → Actions → General → Workflow permissions = "Read and write".**
+
+Breadth (the heavy full-S&P yfinance loop) is intentionally **off** in CI — it's
+the most rate-limit-fragile step; the regime breadth signal degrades to N/A.
+
+### Preview locally
+```bash
+python scripts/seed_demo.py        # one-time: clearly-marked DEMO snapshots
+cd site && python -m http.server   # open http://localhost:8000
+# or with live data:
+python main.py --tickers AAPL,MSFT,KO --json-out site/data/runs/$(date +%F).json
+python scripts/build_index.py
+```
+
 ## Testing
 
 ```bash
-pytest -q     # 43 tests, fully offline
+pytest -q     # offline tests (pipeline, formulas, JSON export, index builder)
 ```
 
 ## Notes / scope

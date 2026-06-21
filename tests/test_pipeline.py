@@ -1,5 +1,6 @@
 """Golden-path / RED short-circuit integration (F12), fully offline."""
 import argparse
+import json
 
 from cache import DiskCache
 import main as main_mod
@@ -49,8 +50,8 @@ class FakeProvider:
 
 def _args(tmp_path, **over):
     base = dict(config="config.yaml", positions=str(tmp_path / "none.yaml"),
-                output=str(tmp_path / "out.csv"), tickers="MEGA", sp500_file=None,
-                max_rows=25, paper=True, verbose=False)
+                output=str(tmp_path / "out.csv"), json_out=None, tickers="MEGA",
+                sp500_file=None, max_rows=25, paper=True, verbose=False)
     base.update(over)
     return argparse.Namespace(**base)
 
@@ -59,19 +60,27 @@ def test_red_regime_short_circuits(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("TRADIER_TOKEN", "x")
     monkeypatch.setattr(main_mod, "DataProvider",
                         lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c"), falling=True))
-    rc = main_mod.run(_args(tmp_path))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, json_out=str(json_out)))
     out = capsys.readouterr().out
     assert rc == 0
     assert "RED" in out
     assert "manage" in out.lower()
     assert not (tmp_path / "out.csv").exists()  # stopped before writing
+    # RED days still appear on the dashboard timeline, with no candidates.
+    doc = json.loads(json_out.read_text())
+    assert doc["schema_version"] == 1
+    assert doc["regime"]["light"] == "RED"
+    assert doc["rows"] == []
+    assert doc["meta"]["candidate_count"] == 0
 
 
 def test_green_end_to_end_writes_csv(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("TRADIER_TOKEN", "x")
     monkeypatch.setattr(main_mod, "DataProvider",
                         lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c"), falling=False))
-    rc = main_mod.run(_args(tmp_path))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, json_out=str(json_out)))
     out = capsys.readouterr().out
     assert rc == 0
     assert "GREEN" in out
@@ -80,3 +89,16 @@ def test_green_end_to_end_writes_csv(tmp_path, monkeypatch, capsys):
     text = csv_path.read_text()
     assert "ticker" in text  # header row
     assert "MEGA" in text
+
+    # JSON snapshot mirrors the run for the dashboard.
+    doc = json.loads(json_out.read_text())
+    assert doc["schema_version"] == 1
+    assert doc["regime"]["light"] == "GREEN"
+    assert set(doc["regime"]["signals"]) == {
+        "spy_below_200dma", "breadth_below_floor", "vix_high_and_spy_falling"}
+    assert doc["meta"]["candidate_count"] == len(doc["rows"]) >= 1
+    row = doc["rows"][0]
+    for key in ("ticker", "score", "annualized_yield", "distance_to_strike",
+                "max_contracts", "sector"):
+        assert key in row
+    assert doc["header"]["total_capital"] == 50000
