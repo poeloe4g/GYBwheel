@@ -1,0 +1,41 @@
+{
+  "updated_at": "2026-06-21T20:13:31+00:00",
+  "latest": "2026-06-21",
+  "runs": [
+    {
+      "date": "2026-06-17",
+      "light": "GREEN",
+      "row_count": 5,
+      "top_score": 2.8,
+      "pct_deployed": 0
+    },
+    {
+      "date": "2026-06-18",
+      "light": "GREEN",
+      "row_count": 4,
+      "top_score": 2.65,
+      "pct_deployed": 0.05
+    },
+    {
+      "date": "2026-06-19",
+      "light": "YELLOW",
+      "row_count": 3,
+      "top_score": 2.9,
+      "pct_deployed": 0.12
+    },
+    {
+      "date": "2026-06-20",
+      "light": "RED",
+      "row_count": 0,
+      "top_score": null,
+      "pct_deployed": 0.18
+    },
+    {
+      "date": "2026-06-21",
+      "light": "GREEN",
+      "row_count": 5,
+      "top_score": 2.55,
+      "pct_deployed": 0.1
+    }
+  ]
+}

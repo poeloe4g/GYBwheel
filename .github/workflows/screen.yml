@@ -1,0 +1,95 @@
+name: Screen and publish dashboard
+
+on:
+  schedule:
+    # 21:15 UTC, Mon–Fri. After the 4pm ET close in both EDT (20:00Z) and
+    # EST (21:00Z). GitHub cron is UTC-only and ignores DST — accept ~1h drift.
+    - cron: "15 21 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      tickers:
+        description: "Comma-separated tickers (blank = default seed universe)"
+        required: false
+        default: ""
+
+# Allow committing snapshots back and deploying to Pages.
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Don't cancel an in-flight deploy; let runs queue.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  screen-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore screener cache
+        uses: actions/cache@v4
+        with:
+          path: .cache
+          key: screener-cache-${{ github.run_id }}
+          restore-keys: |
+            screener-cache-
+
+      - name: Compute run date
+        run: echo "RUN_DATE=$(date -u +%F)" >> "$GITHUB_ENV"
+
+      # The only step allowed to fail without poisoning published state.
+      # No --sp500-file: the full S&P breadth loop over yfinance is the most
+      # rate-limit-fragile/slow part; the breadth signal degrades gracefully.
+      - name: Run screener
+        env:
+          TRADIER_TOKEN: ${{ secrets.TRADIER_TOKEN }}
+          TRADIER_ENV: ${{ secrets.TRADIER_ENV }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.tickers }}" ]; then
+            ARGS="--tickers ${{ github.event.inputs.tickers }}"
+          fi
+          python main.py $ARGS \
+            --json-out "site/data/runs/${RUN_DATE}.json" \
+            --output candidates.csv -v
+
+      # Only reached if the screener exited 0 — keeps the last good latest.json.
+      - name: Rebuild dashboard index + latest
+        run: python scripts/build_index.py --data-dir site/data
+
+      - name: Commit snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add site/data/runs/"${RUN_DATE}".json site/data/index.json site/data/latest.json
+          if git diff --cached --quiet; then
+            echo "No data changes to commit."
+          else
+            git commit -m "data: screener run ${RUN_DATE}"
+            git push
+          fi
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
