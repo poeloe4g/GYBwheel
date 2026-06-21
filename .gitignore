@@ -1,0 +1,20 @@
+# Secrets
+.env
+
+# Caches
+.cache/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Output
+*.csv
+!tests/fixtures/*.csv
+
+# Local positions (may contain real holdings)
+positions.yaml
+!positions.example.yaml
+
+# venv
+.venv/
+venv/
