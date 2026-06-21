@@ -1,0 +1,21 @@
+{
+  "options": {
+    "option": [
+      {"symbol": "XYZ250718P00090000", "option_type": "put", "strike": 90.0,
+       "bid": 0.40, "ask": 0.50, "open_interest": 1200, "volume": 300,
+       "greeks": {"delta": -0.10, "mid_iv": 0.22}},
+      {"symbol": "XYZ250718P00095000", "option_type": "put", "strike": 95.0,
+       "bid": 0.95, "ask": 1.05, "open_interest": 2500, "volume": 800,
+       "greeks": {"delta": -0.20, "mid_iv": 0.24}},
+      {"symbol": "XYZ250718P00097000", "option_type": "put", "strike": 97.0,
+       "bid": 1.40, "ask": 1.55, "open_interest": 1800, "volume": 600,
+       "greeks": {"delta": -0.27, "mid_iv": 0.25}},
+      {"symbol": "XYZ250718P00100000", "option_type": "put", "strike": 100.0,
+       "bid": 2.20, "ask": 2.40, "open_interest": 3000, "volume": 1500,
+       "greeks": {"delta": -0.40, "mid_iv": 0.27}},
+      {"symbol": "XYZ250718C00100000", "option_type": "call", "strike": 100.0,
+       "bid": 2.10, "ask": 2.30, "open_interest": 2000, "volume": 900,
+       "greeks": {"delta": 0.55, "mid_iv": 0.26}}
+    ]
+  }
+}

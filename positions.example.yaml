@@ -1,0 +1,14 @@
+# Current open positions (B3). Copy to positions.yaml.
+# If positions.yaml is absent, the screener treats the account as greenfield
+# (no deployed capital) and says so in the report header.
+positions:
+  - ticker: KO
+    sector: Consumer Staples
+    collateral: 6000      # strike * 100 * contracts
+    opened: 2026-06-01
+    expiry: 2026-07-18
+  - ticker: PEP
+    sector: Consumer Staples
+    collateral: 16500
+    opened: 2026-06-05
+    expiry: 2026-07-18

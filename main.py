@@ -1,0 +1,153 @@
+"""Pipeline orchestration (F12 / B9, Spec 2.4).
+
+regime -> positions -> universe -> select -> filter -> size -> score -> report.
+
+``--paper`` is the default and the only mode: the screener never places trades,
+it only prints and writes a CSV.
+"""
+from __future__ import annotations
+
+import argparse
+import logging
+import sys
+from pathlib import Path
+
+import regime as regime_mod
+import report as report_mod
+import score as score_mod
+import screen as screen_mod
+import size as size_mod
+import universe as universe_mod
+from config import ConfigError, load_config, load_secrets
+from data import DataProvider
+
+log = logging.getLogger("main")
+
+# A small default seed universe (mega-caps across sectors). Override with --tickers.
+DEFAULT_CANDIDATES = [
+    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "JPM", "V", "MA", "UNH",
+    "HD", "PG", "KO", "PEP", "COST", "WMT", "XOM", "CVX", "JNJ", "ABBV",
+]
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="main.py",
+        description="BORING Wheel Screener — cash-secured-put candidate screener (paper-only).",
+    )
+    p.add_argument("--config", default="config.yaml", help="Path to config.yaml")
+    p.add_argument("--positions", default="positions.yaml", help="Path to positions.yaml (B3)")
+    p.add_argument("--output", default="candidates.csv", help="CSV output path")
+    p.add_argument("--tickers", help="Comma-separated tickers to screen (overrides default seed)")
+    p.add_argument("--sp500-file", help="File of S&P 500 tickers (one per line) for breadth")
+    p.add_argument("--max-rows", type=int, default=25, help="Max ranked rows to display")
+    p.add_argument(
+        "--paper", action="store_true", default=True,
+        help="Paper/dry-run mode (default and only mode — never trades).",
+    )
+    p.add_argument("-v", "--verbose", action="store_true", help="Verbose logging")
+    return p
+
+
+def run(args: argparse.Namespace) -> int:
+    logging.basicConfig(
+        level=logging.INFO if args.verbose else logging.WARNING,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
+    config = load_config(args.config)
+    secrets = load_secrets()
+    provider = DataProvider(config, secrets)
+
+    # 1. Regime check ------------------------------------------------------
+    spy_hist = [h["close"] for h in provider.get_price_history("SPY", period="1y")]
+    vix = provider.get_vix()
+    members = _load_lines(args.sp500_file) if args.sp500_file else None
+    breadth = provider.get_breadth(members) if members else None
+    regime = regime_mod.assess(spy_hist, vix, breadth, config)
+
+    account = size_mod.load_positions(args.positions)
+
+    if regime.is_red:
+        header = report_mod.build_header(regime, account, config)
+        print(report_mod.render_console(header, []))
+        print("\nRED regime — manage existing positions only. No new screening.")
+        return 0
+
+    # 2/3. Universe --------------------------------------------------------
+    candidates = (
+        [t.strip().upper() for t in args.tickers.split(",")] if args.tickers
+        else DEFAULT_CANDIDATES
+    )
+    passing = universe_mod.build_universe(candidates, provider, config)
+
+    dte_cfg, delta_cfg, quality = config["dte"], config["delta"], config["quality"]
+    scored_rows = []
+    for f in passing:
+        ticker = f["ticker"]
+        spot = f.get("price")
+        if not spot:
+            hist = provider.get_price_history(ticker, period="5d")
+            spot = hist[-1]["close"] if hist else None
+        if not spot:
+            log.info("skip %s: no spot price", ticker)
+            continue
+
+        # 4. Nearest-delta put
+        put = provider.get_nearest_delta_put(
+            ticker, spot,
+            dte_min=dte_cfg["min"], dte_max=dte_cfg["max"],
+            target_delta=delta_cfg["target"], delta_min=delta_cfg["min"], delta_max=delta_cfg["max"],
+        )
+        if not put:
+            log.info("skip %s: no put in delta/DTE window", ticker)
+            continue
+
+        # 5. Earnings + quality filters
+        next_earn = provider.get_next_earnings(ticker)
+        ok, reason = screen_mod.passes_earnings_filter(
+            put["expiration"], next_earn, avoid=quality["avoid_earnings_before_expiry"]
+        )
+        if not ok:
+            log.info("reject %s: %s", ticker, reason)
+            continue
+        rejections = screen_mod.apply_quality_filters(put, spot, quality)
+        if rejections:
+            log.info("reject %s: %s", ticker, "; ".join(rejections))
+            continue
+
+        # 6. Sizing
+        candidate = {**put, "ticker": ticker, "sector": f.get("sector", "Unknown")}
+        sized = size_mod.size_candidate(candidate, account, config)
+        # 7. Score
+        scored_rows.append(score_mod.score_candidate(sized, config, spot))
+
+    ranked = score_mod.rank(scored_rows)[: args.max_rows]
+
+    # B1 capital sanity check
+    warn = size_mod.sanity_check_capital([r["strike"] for r in scored_rows], config)
+    if warn:
+        log.warning(warn)
+
+    # 8. Report
+    header = report_mod.build_header(regime, account, config)
+    print(report_mod.render_console(header, ranked))
+    out = report_mod.write_csv(ranked, args.output)
+    print(f"\nWrote {len(ranked)} rows to {out}")
+    return 0
+
+
+def _load_lines(path: str) -> list[str]:
+    return [ln.strip().upper() for ln in Path(path).read_text().splitlines() if ln.strip()]
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_arg_parser().parse_args(argv)
+    try:
+        return run(args)
+    except ConfigError as exc:
+        print(f"Configuration error: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
