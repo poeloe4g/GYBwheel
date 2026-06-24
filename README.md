@@ -14,15 +14,16 @@ Built from [`docs/feature-plan.md`](docs/feature-plan.md) and
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-cp .env.example .env          # add your Tradier token
+cp .env.example .env          # optional: FMP_API_KEY for sturdier fundamentals
 cp positions.example.yaml positions.yaml   # optional: your open positions
 
 python main.py --help
 python main.py --tickers AAPL,MSFT,KO -v   # screen a few names -> candidates.csv
 ```
 
-Missing `TRADIER_TOKEN` produces a clear, actionable error. Secrets live in
-`.env` (gitignored); all thresholds live in `config.yaml`.
+Option-chain data comes from yfinance, which needs no credentials, so no API
+key is required to run. The optional `FMP_API_KEY` lives in `.env` (gitignored);
+all thresholds live in `config.yaml`.
 
 ## Pipeline
 
@@ -52,7 +53,7 @@ Missing `TRADIER_TOKEN` produces a clear, actionable error. Secrets live in
 |---|---|
 | `config.py` / `config.yaml` / `.env` | thresholds + secrets loading (B6) |
 | `cache.py` | on-disk cache keyed by date (B7) |
-| `data.py` | abstracted, cached, retrying data layer (Tradier + yfinance) |
+| `data.py` | abstracted, cached, retrying data layer (yfinance) |
 | `formulas.py` | pinned-down, unit-tested formulas (B5) |
 | `screen.py` `universe.py` `regime.py` `size.py` `score.py` `report.py` | pipeline stages |
 | `main.py` | orchestration + CLI (`--paper` default) |
@@ -76,8 +77,8 @@ thresholds, full candidate rows). `scripts/build_index.py` rebuilds
 
 ### One-time repo setup
 1. **Settings → Pages → Source = "GitHub Actions".**
-2. **Settings → Secrets and variables → Actions:** add `TRADIER_TOKEN` (required;
-   optionally `TRADIER_ENV`, `FMP_API_KEY`).
+2. **Settings → Secrets and variables → Actions:** optionally add `FMP_API_KEY`
+   (no secret is required — option-chain data comes from yfinance).
 3. **Settings → Actions → General → Workflow permissions = "Read and write".**
 
 Breadth (the heavy full-S&P yfinance loop) is intentionally **off** in CI — it's
@@ -100,8 +101,9 @@ pytest -q     # offline tests (pipeline, formulas, JSON export, index builder)
 
 ## Notes / scope
 
-- Tradier **sandbox** data is 15-min delayed — fine for an evening
-  "next-day candidates" run. A funded account gives real-time.
+- Option chains come from yfinance (Yahoo). yfinance has no Greeks feed, so put
+  delta is computed via Black-Scholes (`py_vollib`) from IV/spot/strike/DTE —
+  fine for an evening "next-day candidates" screen.
 - yfinance is rate-limit-fragile; mitigated with caching + backoff + a weekly
   static universe.
 - Covered-call / assignment logic is intentionally manual (out of scope for v1).

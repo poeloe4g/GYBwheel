@@ -1,5 +1,5 @@
 # BORING Wheel Screener — thresholds & settings ONLY.
-# Secrets (TRADIER_TOKEN, optional FMP_API_KEY) live in .env, never here (B6).
+# Secrets (optional FMP_API_KEY) live in .env, never here (B6).
 
 account:
   total_capital: 50000

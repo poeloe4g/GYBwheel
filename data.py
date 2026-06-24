@@ -3,9 +3,9 @@
 This is the single source-swappable interface for the screener. Swapping a
 provider (e.g. FMP for fundamentals later) should be a one-file change here.
 
-Network libraries (`requests`, `yfinance`) are imported lazily inside the
-methods that need them so the module — and the tests — import with no network
-and no optional deps installed.
+The network library (`yfinance`) is imported lazily inside the methods that
+need it so the module — and the tests — import with no network and no optional
+deps installed.
 """
 from __future__ import annotations
 
@@ -47,22 +47,26 @@ def _is_rate_limited(exc: Exception) -> bool:
     return status in (429, 500, 502, 503, 504) or "429" in text or "rate" in text or "timeout" in text
 
 
-def normalize_option(raw: dict[str, Any], expiration: str) -> dict[str, Any]:
-    """Normalize a Tradier option entry into the screener's option shape."""
-    greeks = raw.get("greeks") or {}
+def normalize_yf_option(raw: dict[str, Any], expiration: str) -> dict[str, Any]:
+    """Normalize a yfinance option row into the screener's option shape.
+
+    yfinance has no Greeks, so ``delta`` is left None and computed downstream by
+    the Black-Scholes fallback in ``screen._effective_abs_delta`` from iv/spot/
+    strike/dte. Accepts a plain dict (e.g. ``DataFrame.to_dict('records')`` row).
+    """
     bid = _f(raw.get("bid"))
     ask = _f(raw.get("ask"))
     mid = (bid + ask) / 2 if (bid is not None and ask is not None) else None
     return {
-        "symbol": raw.get("symbol"),
-        "option_type": raw.get("option_type"),
+        "symbol": raw.get("contractSymbol"),
+        "option_type": "put",
         "strike": _f(raw.get("strike")),
         "bid": bid,
         "ask": ask,
         "mid": mid,
-        "delta": _f(greeks.get("delta")),
-        "iv": _f(greeks.get("mid_iv") or greeks.get("smv_vol")),
-        "open_interest": _i(raw.get("open_interest")),
+        "delta": None,
+        "iv": _f(raw.get("impliedVolatility")),
+        "open_interest": _i(raw.get("openInterest")),
         "volume": _i(raw.get("volume")),
         "expiration": expiration,
         "dte": dte_for(expiration),
@@ -99,49 +103,35 @@ class DataProvider:
         self.cache = cache or DiskCache(data_cfg.get("cache_dir", ".cache"))
         self.max_retries = int(data_cfg.get("max_retries", 4))
 
-    # --- Tradier (option chains) -------------------------------------------
-    def _tradier_get(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
-        import requests
-
-        url = f"{self.secrets.tradier_base_url}{path}"
-        headers = {
-            "Authorization": f"Bearer {self.secrets.tradier_token}",
-            "Accept": "application/json",
-        }
-
-        def call() -> dict[str, Any]:
-            resp = requests.get(url, params=params, headers=headers, timeout=30)
-            resp.raise_for_status()
-            return resp.json()
-
-        return with_backoff(call, max_retries=self.max_retries, is_transient=_is_rate_limited)
-
+    # --- yfinance (option chains) ------------------------------------------
     def get_expirations(self, ticker: str) -> list[str]:
         cached = self.cache.get("expirations", ticker)
         if cached is not None:
             return cached
-        payload = self._tradier_get(
-            "/markets/options/expirations", {"symbol": ticker, "includeAllRoots": "true"}
-        )
-        dates = ((payload or {}).get("expirations") or {}).get("date") or []
-        if isinstance(dates, str):
-            dates = [dates]
+
+        import yfinance as yf
+
+        def call() -> list[str]:
+            return list(yf.Ticker(ticker).options or [])
+
+        dates = with_backoff(call, max_retries=self.max_retries, is_transient=_is_rate_limited)
         self.cache.set("expirations", ticker, dates)
         return dates
 
-    def get_option_chain(self, ticker: str, expiration: str, greeks: bool = True) -> list[dict[str, Any]]:
+    def get_option_chain(self, ticker: str, expiration: str) -> list[dict[str, Any]]:
         key = f"{ticker}:{expiration}"
         cached = self.cache.get("chain", key)
         if cached is not None:
             return cached
-        payload = self._tradier_get(
-            "/markets/options/chains",
-            {"symbol": ticker, "expiration": expiration, "greeks": "true" if greeks else "false"},
-        )
-        raw = ((payload or {}).get("options") or {}).get("option") or []
-        if isinstance(raw, dict):
-            raw = [raw]
-        chain = [normalize_option(o, expiration) for o in raw]
+
+        import yfinance as yf
+
+        def call() -> list[dict[str, Any]]:
+            puts = yf.Ticker(ticker).option_chain(expiration).puts
+            return puts.to_dict("records")
+
+        rows = with_backoff(call, max_retries=self.max_retries, is_transient=_is_rate_limited)
+        chain = [normalize_yf_option(o, expiration) for o in rows]
         self.cache.set("chain", key, chain)
         return chain
 
@@ -153,7 +143,7 @@ class DataProvider:
         from screen import select_nearest_delta_put
 
         expirations = [e for e in self.get_expirations(ticker) if dte_min <= dte_for(e) <= dte_max]
-        chains = [self.get_option_chain(ticker, e, greeks=True) for e in expirations]
+        chains = [self.get_option_chain(ticker, e) for e in expirations]
         flat = [opt for chain in chains for opt in chain]
         return select_nearest_delta_put(
             flat, spot,

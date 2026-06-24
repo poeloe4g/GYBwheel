@@ -13,23 +13,22 @@ def test_load_config_has_corrected_fields(config):
     assert "cache_dir" in config["data"]
 
 
-def test_missing_token_raises(monkeypatch):
-    monkeypatch.delenv("TRADIER_TOKEN", raising=False)
-    with pytest.raises(config_mod.ConfigError) as exc:
-        config_mod.load_secrets(env_path="/nonexistent/.env")
-    assert "TRADIER_TOKEN" in str(exc.value)
-
-
-def test_token_loaded_from_env(monkeypatch):
-    monkeypatch.setenv("TRADIER_TOKEN", "abc123")
+def test_load_secrets_requires_no_token(monkeypatch):
+    # Option-chain data comes from yfinance (no credentials); load must not raise.
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
     secrets = config_mod.load_secrets(env_path="/nonexistent/.env")
-    assert secrets.tradier_token == "abc123"
-    assert "sandbox" in secrets.tradier_base_url
+    assert secrets.fmp_api_key is None
+
+
+def test_fmp_key_loaded_from_env(monkeypatch):
+    monkeypatch.setenv("FMP_API_KEY", "fmpkey")
+    secrets = config_mod.load_secrets(env_path="/nonexistent/.env")
+    assert secrets.fmp_api_key == "fmpkey"
 
 
 def test_secret_in_config_rejected(tmp_path):
     bad = tmp_path / "config.yaml"
-    bad.write_text("quality:\n  tradier_token: leaked\n")
+    bad.write_text("quality:\n  fmp_api_key: leaked\n")
     with pytest.raises(config_mod.ConfigError):
         config_mod.load_config(bad)
 
