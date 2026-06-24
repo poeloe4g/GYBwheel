@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "meta": {
-    "generated_at": "2026-06-24T12:53:02+00:00",
+    "generated_at": "2026-06-24T22:38:45+00:00",
     "run_date": "2026-06-24",
     "candidate_count": 0,
     "data_source": "yfinance",
