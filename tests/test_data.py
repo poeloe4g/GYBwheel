@@ -4,13 +4,19 @@ import data
 from cache import DiskCache
 
 
-def test_normalize_option_computes_mid_and_dte():
-    raw = {"symbol": "X", "option_type": "put", "strike": 95.0, "bid": 0.95, "ask": 1.05,
-           "open_interest": 2500, "volume": 800, "greeks": {"delta": -0.20, "mid_iv": 0.24}}
-    opt = data.normalize_option(raw, "2099-07-18")
+def test_normalize_yf_option_maps_fields_and_omits_greeks():
+    # yfinance puts-row shape (DataFrame.to_dict('records') entry).
+    raw = {"contractSymbol": "XYZ250718P00095000", "strike": 95.0, "bid": 0.95,
+           "ask": 1.05, "impliedVolatility": 0.24, "openInterest": 2500, "volume": 800}
+    opt = data.normalize_yf_option(raw, "2099-07-18")
+    assert opt["symbol"] == "XYZ250718P00095000"
+    assert opt["option_type"] == "put"
+    assert opt["strike"] == 95.0
     assert opt["mid"] == 1.0
-    assert opt["delta"] == -0.20
     assert opt["iv"] == 0.24
+    assert opt["delta"] is None  # no Greeks feed; BS fallback fills delta downstream
+    assert opt["open_interest"] == 2500
+    assert opt["volume"] == 800
     assert opt["dte"] > 0
 
 

@@ -57,7 +57,6 @@ def _args(tmp_path, **over):
 
 
 def test_red_regime_short_circuits(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("TRADIER_TOKEN", "x")
     monkeypatch.setattr(main_mod, "DataProvider",
                         lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c"), falling=True))
     json_out = tmp_path / "run.json"
@@ -76,7 +75,6 @@ def test_red_regime_short_circuits(tmp_path, monkeypatch, capsys):
 
 
 def test_green_end_to_end_writes_csv(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("TRADIER_TOKEN", "x")
     monkeypatch.setattr(main_mod, "DataProvider",
                         lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c"), falling=False))
     json_out = tmp_path / "run.json"

@@ -76,7 +76,7 @@ def run(args: argparse.Namespace) -> int:
             report_mod.write_json(
                 header, [], regime, config, args.json_out,
                 meta_extra={
-                    "tradier_env": secrets.tradier_env,
+                    "data_source": "yfinance",
                     "tickers_screened": [],
                     "breadth_evaluated": bool(members),
                     "max_rows": args.max_rows,
@@ -148,7 +148,7 @@ def run(args: argparse.Namespace) -> int:
         jout = report_mod.write_json(
             header, ranked, regime, config, args.json_out,
             meta_extra={
-                "tradier_env": secrets.tradier_env,
+                "data_source": "yfinance",
                 "tickers_screened": candidates,
                 "breadth_evaluated": bool(members),
                 "max_rows": args.max_rows,

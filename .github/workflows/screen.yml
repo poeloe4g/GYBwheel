@@ -56,8 +56,6 @@ jobs:
       # rate-limit-fragile/slow part; the breadth signal degrades gracefully.
       - name: Run screener
         env:
-          TRADIER_TOKEN: ${{ secrets.TRADIER_TOKEN }}
-          TRADIER_ENV: ${{ secrets.TRADIER_ENV }}
           FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
         run: |
           ARGS=""

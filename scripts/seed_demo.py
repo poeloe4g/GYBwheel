@@ -104,7 +104,7 @@ def main() -> int:
         report_mod.write_json(
             header, rows, _Regime(light, signals), _CONFIG,
             runs_dir / f"{ts.date().isoformat()}.json",
-            meta_extra={"demo": True, "tradier_env": "sandbox",
+            meta_extra={"demo": True, "data_source": "yfinance",
                         "tickers_screened": [r["ticker"] for r in rows],
                         "breadth_evaluated": False, "max_rows": 25},
             generated_at=ts,

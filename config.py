@@ -27,15 +27,7 @@ class ConfigError(RuntimeError):
 
 @dataclass
 class Secrets:
-    tradier_token: str
-    tradier_env: str = "sandbox"
     fmp_api_key: str | None = None
-
-    @property
-    def tradier_base_url(self) -> str:
-        if self.tradier_env.lower() == "production":
-            return "https://api.tradier.com/v1"
-        return "https://sandbox.tradier.com/v1"
 
 
 def load_config(path: str | os.PathLike[str] | None = None) -> dict[str, Any]:
@@ -52,21 +44,16 @@ def load_config(path: str | os.PathLike[str] | None = None) -> dict[str, Any]:
 
 
 def load_secrets(env_path: str | os.PathLike[str] | None = None) -> Secrets:
-    """Load secrets from .env / environment. Missing TRADIER_TOKEN is fatal."""
+    """Load optional secrets from .env / environment.
+
+    Option-chain data now comes from yfinance, which needs no credentials, so no
+    secret is required. ``FMP_API_KEY`` remains optional for enhanced fundamentals.
+    """
     if load_dotenv is not None:
         # load_dotenv is a no-op if the file doesn't exist.
         load_dotenv(env_path or (ROOT / ".env"))
 
-    token = (os.environ.get("TRADIER_TOKEN") or "").strip()
-    if not token:
-        raise ConfigError(
-            "TRADIER_TOKEN is missing or empty. Copy .env.example to .env and set "
-            "your Tradier token (https://developer.tradier.com/), or export "
-            "TRADIER_TOKEN in your environment."
-        )
     return Secrets(
-        tradier_token=token,
-        tradier_env=(os.environ.get("TRADIER_ENV") or "sandbox").strip(),
         fmp_api_key=(os.environ.get("FMP_API_KEY") or "").strip() or None,
     )
 

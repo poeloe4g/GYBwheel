@@ -39,7 +39,7 @@ def test_write_json_sanitizes_infinity(tmp_path):
              "annualized_yield": 0.18}]
     out = report_mod.write_json(
         _header(), rows, _Regime(), _CONFIG, tmp_path / "run.json",
-        meta_extra={"tradier_env": "sandbox"},
+        meta_extra={"data_source": "yfinance"},
         generated_at=datetime(2026, 6, 21, 21, 5, tzinfo=timezone.utc),
     )
     # Raw text must be valid JSON (no Infinity literal the browser rejects).
@@ -48,7 +48,7 @@ def test_write_json_sanitizes_infinity(tmp_path):
     doc = json.loads(text)
     assert doc["rows"][0]["min_account_for_1_contract"] is None
     assert doc["meta"]["run_date"] == "2026-06-21"
-    assert doc["meta"]["tradier_env"] == "sandbox"
+    assert doc["meta"]["data_source"] == "yfinance"
     assert doc["thresholds"]["scoring_mode"] == "blended"
 
 
