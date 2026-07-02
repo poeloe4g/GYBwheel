@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-07-01T22:39:12+00:00",
-  "latest": "2026-07-01",
+  "updated_at": "2026-07-02T22:17:54+00:00",
+  "latest": "2026-07-02",
   "runs": [
     {
       "date": "2026-06-17",
@@ -74,6 +74,13 @@
     },
     {
       "date": "2026-07-01",
+      "light": "GREEN",
+      "row_count": 0,
+      "top_score": null,
+      "pct_deployed": 0.0
+    },
+    {
+      "date": "2026-07-02",
       "light": "GREEN",
       "row_count": 0,
       "top_score": null,
