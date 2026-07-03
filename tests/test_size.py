@@ -17,6 +17,23 @@ def test_affordable_name_within_cap(config):
     sized = size.size_candidate(cand, account, config)
     assert sized["breaches_per_name_cap"] is False  # 2000 <= 2500
     assert sized["max_contracts"] == 1  # floor(2500 / 2000)
+    assert sized["affordable"] is True
+
+
+def test_affordable_flag_tracks_headroom(config):
+    # A big strike is never affordable; a small one stops being affordable once
+    # existing positions consume the per-name headroom.
+    greenfield = size.AccountState()
+    big = {"ticker": "BIG", "sector": "Technology", "strike": 100.0, "mid": 2.2, "dte": 35}
+    assert size.size_candidate(big, greenfield, config)["affordable"] is False
+
+    consumed = size.AccountState(total_deployed=2000.0, per_sector={"Industrials": 2000.0},
+                                 per_ticker={"SMALL": 2000.0}, positions_loaded=True,
+                                 source="test")
+    small = {"ticker": "SMALL", "sector": "Industrials", "strike": 20.0, "mid": 0.5, "dte": 35}
+    sized = size.size_candidate(small, consumed, config)
+    assert sized["max_contracts"] == 0  # name headroom 500 < 2000 collateral
+    assert sized["affordable"] is False
 
 
 def test_sector_and_total_headroom(config):

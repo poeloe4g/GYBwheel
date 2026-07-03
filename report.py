@@ -23,13 +23,15 @@ from typing import Any
 #       (per-contract gate counts across the whole delta band, while
 #       ``rejections_by_reason`` stays per-ticker for history comparability);
 #       option rows carry ``last_price``/``last_trade_date``/``quote_quality``;
-#       ``meta.market_session`` + ``meta.quotes_trusted`` stamp off-hours runs.
+#       ``meta.market_session`` + ``meta.quotes_trusted`` stamp off-hours runs;
+#       sized rows carry ``affordable``; ``meta.capital_warning`` surfaces the
+#       B1 capital sanity check (null when the account fits the universe).
 SCHEMA_VERSION = 3
 
 CSV_COLUMNS = [
     "ticker", "sector", "expiration", "dte", "strike", "mid", "abs_delta",
     "roc", "annualized_yield", "yield_30dte", "distance_to_strike", "implied_move",
-    "score", "max_contracts", "collateral_per_contract",
+    "score", "max_contracts", "collateral_per_contract", "affordable",
     "breaches_per_name_cap", "min_account_for_1_contract", "flags",
 ]
 

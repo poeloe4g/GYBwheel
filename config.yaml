@@ -6,6 +6,10 @@ account:
   max_pct_per_name: 0.05      # per-name collateral cap
   max_pct_per_sector: 0.25    # per-sector collateral cap
   max_pct_deployed: 0.50      # total deployed cap
+  # Opt-in: demote otherwise-clean candidates whose single-contract collateral
+  # exceeds the remaining cap headroom (rejection code: unaffordable). Off by
+  # default — unaffordable rows stay visible with affordable=false / BREACH.
+  require_affordable: false
 
 universe:
   min_market_cap: 20000000000   # $20B
@@ -46,6 +50,7 @@ quality:
 
 scoring:
   mode: blended                    # blended | annualized_yield_only  (B4)
+  prefer_affordable: true          # rank tradeable (affordable) candidates first
 
 regime:
   breadth_floor: 0.40              # % of S&P 500 above 50-DMA

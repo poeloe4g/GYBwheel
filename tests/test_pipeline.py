@@ -36,6 +36,10 @@ class FakeProvider:
             "RESCUE": {"ticker": "RESCUE", "market_cap": 5e11, "avg_volume": 5e6,
                        "net_income": 3e10, "free_cash_flow": 2.5e10,
                        "sector": "Utilities", "has_options": True, "price": 100.0},
+            # PRICEY passes every gate but one contract needs $80k collateral.
+            "PRICEY": {"ticker": "PRICEY", "market_cap": 5e11, "avg_volume": 5e6,
+                       "net_income": 3e10, "free_cash_flow": 2.5e10,
+                       "sector": "Technology", "has_options": True, "price": 1000.0},
         }
 
     def get_price_history(self, ticker, period="1y"):
@@ -71,6 +75,10 @@ class FakeProvider:
                 {**put, "strike": 17.0, "bid": 0.20, "ask": 0.22, "mid": 0.21,
                  "delta": -0.16, "open_interest": 3000},
             ]
+        elif ticker == "PRICEY":  # clean gates, $80k collateral per contract;
+            # rich premium so its blended score beats MEGA's and the
+            # prefer_affordable re-ordering is actually exercised.
+            put.update(strike=800.0, bid=88.0, ask=92.0, mid=90.0)
         return [put]
 
     def get_put_candidate(self, ticker, spot, *, quality, next_earnings=None, **kw):
@@ -147,6 +155,7 @@ def test_green_end_to_end_writes_csv(tmp_path, monkeypatch, capsys):
     # Snapshots are stamped with the (approximate) market session.
     assert doc["meta"]["market_session"] in ("regular", "closed")
     assert doc["meta"]["quotes_trusted"] == (doc["meta"]["market_session"] == "regular")
+    assert doc["meta"]["capital_warning"] is None  # strike 18 fits the $2.5k cap
 
 
 def test_market_session_from_utc():
@@ -206,15 +215,60 @@ def test_filter_then_select_rescues_adjacent_strike(tmp_path, monkeypatch):
     assert doc["meta"]["contract_gate_failures"] == {"open_interest": 1}
 
 
-def _config_with_policy(tmp_path, policy):
-    """The shipped config with quality.unknown_earnings_policy overridden."""
+def _config_with(tmp_path, section, **overrides):
+    """The shipped config with one section's keys overridden."""
     import yaml
 
     cfg = yaml.safe_load(Path("config.yaml").read_text())
-    cfg["quality"]["unknown_earnings_policy"] = policy
+    cfg[section].update(overrides)
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(cfg))
     return str(path)
+
+
+def _config_with_policy(tmp_path, policy):
+    return _config_with(tmp_path, "quality", unknown_earnings_policy=policy)
+
+
+def test_affordability_annotated_and_ranked_first(tmp_path, monkeypatch):
+    """Default: unaffordable clean rows stay visible but rank below affordable
+    ones (prefer_affordable), with the capital warning surfaced in meta."""
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c")))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, tickers="PRICEY,MEGA", json_out=str(json_out)))
+    assert rc == 0
+    doc = json.loads(json_out.read_text())
+    rows = {r["ticker"]: r for r in doc["rows"]}
+    assert set(rows) == {"MEGA", "PRICEY"}
+    assert rows["MEGA"]["affordable"] is True
+    assert rows["PRICEY"]["affordable"] is False
+    assert rows["PRICEY"]["breaches_per_name_cap"] is True
+    # PRICEY's blended score is higher, but the affordable name ranks first.
+    assert rows["PRICEY"]["score"] > rows["MEGA"]["score"]
+    assert [r["ticker"] for r in doc["rows"]] == ["MEGA", "PRICEY"]
+    # The 'affordable' flag reaches the CSV.
+    header, *lines = (tmp_path / "out.csv").read_text().splitlines()
+    assert "affordable" in header
+    # B1 heuristic: the (upper-)median strike of [18, 800] breaches the cap.
+    assert "small" in doc["meta"]["capital_warning"]
+
+
+def test_require_affordable_demotes_with_reason(tmp_path, monkeypatch):
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c")))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, tickers="PRICEY", json_out=str(json_out),
+                            config=_config_with(tmp_path, "account", require_affordable=True)))
+    assert rc == 0
+    doc = json.loads(json_out.read_text())
+    assert doc["rows"] == []
+    near = doc["near_misses"][0]
+    assert near["ticker"] == "PRICEY"
+    assert [e["code"] for e in near["rejection_reasons"]] == ["unaffordable"]
+    assert doc["meta"]["rejections_by_reason"] == {"unaffordable": 1}
+    # All sized rows breach -> the B1 capital warning reaches the snapshot.
+    assert "small" in doc["meta"]["capital_warning"]
 
 
 def test_unknown_earnings_promoted_with_flag(tmp_path, monkeypatch):

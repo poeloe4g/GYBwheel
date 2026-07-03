@@ -107,6 +107,8 @@ def run(args: argparse.Namespace) -> int:
 
     dte_cfg, delta_cfg, quality = config["dte"], config["delta"], config["quality"]
     earnings_policy = _resolve_earnings_policy(quality)
+    require_affordable = bool(config["account"].get("require_affordable", False))
+    prefer_affordable = bool(config.get("scoring", {}).get("prefer_affordable", False))
     scored_rows = []
     near_miss_rows = []
     rejection_counts: dict[str, int] = {}
@@ -179,6 +181,14 @@ def run(args: argparse.Namespace) -> int:
         sized = size_mod.size_candidate(candidate, account, config)
         scored = score_mod.score_candidate(sized, config, spot)
 
+        if require_affordable and not sized["affordable"]:
+            rejections.append({
+                "code": "unaffordable",
+                "message": (f"collateral ${sized['collateral_per_contract']:,.0f} exceeds "
+                            f"available headroom (min account "
+                            f"${sized['min_account_for_1_contract']:,.0f})"),
+            })
+
         # Flags-only rows whose every flag is the earnings one are promotable
         # under policy=flag; all other flags (iv_missing, spread_unknown,
         # oi_unknown) keep the near-miss route — they never pass silently.
@@ -203,11 +213,13 @@ def run(args: argparse.Namespace) -> int:
                     _count_flag(e["code"])
             scored_rows.append({**scored, "data_flags": flags})
 
-    ranked = score_mod.rank(scored_rows)[: args.max_rows]
+    ranked = score_mod.rank(scored_rows, prefer_affordable=prefer_affordable)[: args.max_rows]
     near_misses = score_mod.rank(near_miss_rows)[: args.max_rows]
 
-    # B1 capital sanity check
-    warn = size_mod.sanity_check_capital([r["strike"] for r in scored_rows], config)
+    # B1 capital sanity check — over every sized row (candidates AND near
+    # misses): the warning matters most when everything breaches the cap.
+    warn = size_mod.sanity_check_capital(
+        [r["strike"] for r in scored_rows + near_miss_rows], config)
     if warn:
         log.warning(warn)
 
@@ -231,6 +243,7 @@ def run(args: argparse.Namespace) -> int:
                 "contract_gate_failures": contract_gate_failures,
                 "market_session": session,
                 "quotes_trusted": session == "regular",
+                "capital_warning": warn,
             },
         )
         print(f"Wrote run snapshot to {jout}")

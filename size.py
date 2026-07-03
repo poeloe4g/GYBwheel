@@ -87,6 +87,9 @@ def size_candidate(
         "annualized_yield": formulas.annualized_yield(premium, strike, dte),
         "yield_30dte": formulas.yield_30dte(premium, strike, dte),
         "max_contracts": max_contracts,
+        # Headroom-aware: false when even one contract exceeds what the caps
+        # (per-name/sector/total, net of open positions) leave available.
+        "affordable": max_contracts >= 1,
         "breaches_per_name_cap": breaches,
         "min_account_for_1_contract": round(min_account_for_1, 2),
         "name_headroom": round(name_headroom, 2),

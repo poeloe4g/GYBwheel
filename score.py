@@ -38,5 +38,13 @@ def score_candidate(row: dict[str, Any], config: dict[str, Any], spot: float) ->
     }
 
 
-def rank(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def rank(rows: list[dict[str, Any]], *, prefer_affordable: bool = False) -> list[dict[str, Any]]:
+    """Sort by score; with ``prefer_affordable``, tradeable rows rank first.
+
+    An unaffordable row (``size.size_candidate``'s headroom-aware flag) can't
+    be acted on at 1 contract, so a lower-scoring affordable name outranks it.
+    """
+    if prefer_affordable:
+        return sorted(rows, key=lambda r: (not r.get("affordable", False),
+                                           -r.get("score", 0.0)))
     return sorted(rows, key=lambda r: r.get("score", 0.0), reverse=True)

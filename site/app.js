@@ -71,8 +71,9 @@ function renderRegime(doc) {
 
 function renderCards(doc) {
   const h = doc.header || {};
+  const rows = doc.rows || [];
   const nearMissCount = (doc.near_misses || []).length;
-  const candidates = String((doc.rows || []).length) +
+  const candidates = String(rows.length) +
     (nearMissCount ? ` (+${nearMissCount} near miss${nearMissCount > 1 ? "es" : ""})` : "");
   const cards = [
     ["Total capital", fmtUsd(h.total_capital)],
@@ -81,9 +82,19 @@ function renderCards(doc) {
     ["Candidates", candidates],
     ["Positions", h.positions_source || "—"],
   ];
+  // Only v3+ rows carry `affordable`; skip the card for older snapshots.
+  if (rows.some((r) => r.affordable != null)) {
+    const n = rows.filter((r) => r.affordable).length;
+    cards.splice(4, 0, ["Tradeable", rows.length
+      ? `${n} of ${rows.length} fit the per-name cap` : "—"]);
+  }
   $("#capital-cards").innerHTML = cards
     .map(([l, v]) => `<div class="card"><div class="label">${l}</div><div class="value">${v}</div></div>`)
     .join("");
+  const warnEl = $("#capital-warning");
+  const warn = doc.meta && doc.meta.capital_warning;
+  warnEl.textContent = warn ? `⚠ ${warn}` : "";
+  warnEl.classList.toggle("hidden", !warn);
 }
 
 function renderTable() {
