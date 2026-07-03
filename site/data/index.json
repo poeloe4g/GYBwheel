@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-03T14:16:08+00:00",
+  "updated_at": "2026-07-03T20:45:24+00:00",
   "latest": "2026-07-03",
   "runs": [
     {
@@ -80,7 +80,7 @@
       "top_score": 0.13317485838136345,
       "pct_deployed": 0.0,
       "demo": false,
-      "quotes_trusted": true
+      "quotes_trusted": false
     }
   ]
 }
