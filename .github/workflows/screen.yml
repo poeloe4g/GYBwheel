@@ -2,9 +2,11 @@ name: Screen and publish dashboard
 
 on:
   schedule:
-    # 21:15 UTC, Mon–Fri. After the 4pm ET close in both EDT (20:00Z) and
-    # EST (21:00Z). GitHub cron is UTC-only and ignores DST — accept ~1h drift.
-    - cron: "15 21 * * 1-5"
+    # 19:45 UTC, Mon–Fri: 3:45pm ET during EDT, 2:45pm ET during EST — inside
+    # regular market hours either way, so option quotes are live (after-close
+    # yfinance bid/asks are stale/zeroed and blow up the spread gate).
+    # GitHub cron is UTC-only and ignores DST — accept ~1h drift.
+    - cron: "45 19 * * 1-5"
   workflow_dispatch:
     inputs:
       tickers:
@@ -12,11 +14,12 @@ on:
         required: false
         default: ""
 
-# Allow committing snapshots back and deploying to Pages.
+# Allow committing snapshots back, deploying to Pages, and filing alert issues.
 permissions:
   contents: write
   pages: write
   id-token: write
+  issues: write
 
 # Don't cancel an in-flight deploy; let runs queue.
 concurrency:
@@ -55,8 +58,6 @@ jobs:
       # No --sp500-file: the full S&P breadth loop over yfinance is the most
       # rate-limit-fragile/slow part; the breadth signal degrades gracefully.
       - name: Run screener
-        env:
-          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
         run: |
           ARGS=""
           if [ -n "${{ github.event.inputs.tickers }}" ]; then
@@ -69,6 +70,13 @@ jobs:
       # Only reached if the screener exited 0 — keeps the last good latest.json.
       - name: Rebuild dashboard index + latest
         run: python scripts/build_index.py --data-dir site/data
+
+      # Exit 1 on >=3 consecutive zero-candidate (non-RED) runs. Outcome-gated
+      # alerting below; continue-on-error keeps the deploy publishing.
+      - name: Check zero-candidate streak
+        id: streak
+        continue-on-error: true
+        run: python scripts/check_streak.py --index site/data/index.json --threshold 3
 
       - name: Commit snapshot
         run: |
@@ -91,3 +99,56 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deploy
         uses: actions/deploy-pages@v4
+
+      # Idempotent alerts: one open issue per label collects repeats via
+      # comments; closing the issue re-arms the alert.
+      - name: Alert on zero-candidate streak
+        if: steps.streak.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = "zero-candidates";
+            const title = "Screener has produced 0 candidates for 3+ runs";
+            const body = [
+              "The scheduled screener has published zero candidates for 3 or more",
+              "consecutive non-RED runs. Quality gates may be miscalibrated or the",
+              "data feed degraded.",
+              "",
+              `Latest run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              "",
+              "Closing this issue re-arms the alert.",
+            ].join("\n");
+            const { data: open } = await github.rest.issues.listForRepo({
+              ...context.repo, state: "open", labels: label, per_page: 1 });
+            if (open.length) {
+              await github.rest.issues.createComment({
+                ...context.repo, issue_number: open[0].number,
+                body: `Still zero candidates: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}` });
+            } else {
+              try {
+                await github.rest.issues.createLabel({ ...context.repo, name: label, color: "e0a800" });
+              } catch (e) { /* label already exists */ }
+              await github.rest.issues.create({ ...context.repo, title, body, labels: [label] });
+            }
+
+      - name: Alert on workflow failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = "screener-failure";
+            const title = "Scheduled screener run failed";
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const { data: open } = await github.rest.issues.listForRepo({
+              ...context.repo, state: "open", labels: label, per_page: 1 });
+            if (open.length) {
+              await github.rest.issues.createComment({
+                ...context.repo, issue_number: open[0].number, body: `Failed again: ${runUrl}` });
+            } else {
+              try {
+                await github.rest.issues.createLabel({ ...context.repo, name: label, color: "d73027" });
+              } catch (e) { /* label already exists */ }
+              await github.rest.issues.create({
+                ...context.repo, title, labels: [label],
+                body: `The scheduled screener workflow failed.\n\nRun: ${runUrl}\n\nClosing this issue re-arms the alert.` });
+            }

@@ -1,90 +1,69 @@
 {
-  "updated_at": "2026-07-02T22:17:54+00:00",
+  "updated_at": "2026-07-03T10:20:21+00:00",
   "latest": "2026-07-02",
   "runs": [
-    {
-      "date": "2026-06-17",
-      "light": "GREEN",
-      "row_count": 5,
-      "top_score": 2.8,
-      "pct_deployed": 0
-    },
-    {
-      "date": "2026-06-18",
-      "light": "GREEN",
-      "row_count": 4,
-      "top_score": 2.65,
-      "pct_deployed": 0.05
-    },
-    {
-      "date": "2026-06-19",
-      "light": "YELLOW",
-      "row_count": 3,
-      "top_score": 2.9,
-      "pct_deployed": 0.12
-    },
-    {
-      "date": "2026-06-20",
-      "light": "RED",
-      "row_count": 0,
-      "top_score": null,
-      "pct_deployed": 0.18
-    },
-    {
-      "date": "2026-06-21",
-      "light": "GREEN",
-      "row_count": 5,
-      "top_score": 2.55,
-      "pct_deployed": 0.1
-    },
     {
       "date": "2026-06-24",
       "light": "GREEN",
       "row_count": 0,
+      "near_miss_count": 0,
       "top_score": null,
-      "pct_deployed": 0.0
+      "pct_deployed": 0.0,
+      "demo": false
     },
     {
       "date": "2026-06-25",
       "light": "GREEN",
       "row_count": 0,
+      "near_miss_count": 0,
       "top_score": null,
-      "pct_deployed": 0.0
+      "pct_deployed": 0.0,
+      "demo": false
     },
     {
       "date": "2026-06-26",
       "light": "GREEN",
       "row_count": 0,
+      "near_miss_count": 0,
       "top_score": null,
-      "pct_deployed": 0.0
+      "pct_deployed": 0.0,
+      "demo": false
     },
     {
       "date": "2026-06-29",
       "light": "GREEN",
       "row_count": 0,
+      "near_miss_count": 0,
       "top_score": null,
-      "pct_deployed": 0.0
+      "pct_deployed": 0.0,
+      "demo": false
     },
     {
       "date": "2026-06-30",
       "light": "GREEN",
       "row_count": 0,
+      "near_miss_count": 0,
       "top_score": null,
-      "pct_deployed": 0.0
+      "pct_deployed": 0.0,
+      "demo": false
     },
     {
       "date": "2026-07-01",
       "light": "GREEN",
       "row_count": 0,
+      "near_miss_count": 0,
       "top_score": null,
-      "pct_deployed": 0.0
+      "pct_deployed": 0.0,
+      "demo": false
     },
     {
       "date": "2026-07-02",
       "light": "GREEN",
       "row_count": 0,
+      "near_miss_count": 0,
       "top_score": null,
-      "pct_deployed": 0.0
+      "pct_deployed": 0.0,
+      "demo": false
     }
   ]
 }

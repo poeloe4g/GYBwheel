@@ -47,6 +47,9 @@
         <canvas id="chart-sector"></canvas></figure>
       <figure class="chart-card"><figcaption>Capital deployed</figcaption>
         <canvas id="chart-deployed"></canvas></figure>
+      <figure class="chart-card hidden" id="chart-rejections-card">
+        <figcaption>Rejections by reason</figcaption>
+        <canvas id="chart-rejections"></canvas></figure>
     </section>
 
     <!-- Candidates table -->
@@ -68,6 +71,32 @@
               <th data-key="score" class="num">Score</th>
               <th data-key="max_contracts" class="num">Max</th>
               <th data-key="flags">Flags</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Near misses -->
+    <section id="near-miss-section" class="hidden">
+      <h2>Near misses</h2>
+      <p class="muted">Sized and scored like candidates, but rejected by a quality gate
+        or carrying missing-data flags (hover a badge for the reason).</p>
+      <div class="table-wrap">
+        <table id="near-misses">
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th>Sector</th>
+              <th>Exp</th>
+              <th class="num">DTE</th>
+              <th class="num">Strike</th>
+              <th class="num">Mid</th>
+              <th class="num">Ann %</th>
+              <th class="num">Dist %</th>
+              <th class="num">Score</th>
+              <th>Reasons</th>
             </tr>
           </thead>
           <tbody></tbody>

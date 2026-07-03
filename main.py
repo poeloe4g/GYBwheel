@@ -23,11 +23,14 @@ from data import DataProvider
 
 log = logging.getLogger("main")
 
-# A small default seed universe (mega-caps across sectors). Override with --tickers.
+# Fallback seed universe (mega-caps across sectors), used only when neither
+# --tickers is given nor the --tickers-file exists.
 DEFAULT_CANDIDATES = [
     "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "JPM", "V", "MA", "UNH",
     "HD", "PG", "KO", "PEP", "COST", "WMT", "XOM", "CVX", "JNJ", "ABBV",
 ]
+
+DEFAULT_TICKERS_FILE = "data/universe_sp100.txt"
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -39,7 +42,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--positions", default="positions.yaml", help="Path to positions.yaml (B3)")
     p.add_argument("--output", default="candidates.csv", help="CSV output path")
     p.add_argument("--json-out", help="Write a run snapshot JSON here (dashboard feed).")
-    p.add_argument("--tickers", help="Comma-separated tickers to screen (overrides default seed)")
+    p.add_argument("--tickers", help="Comma-separated tickers to screen (overrides --tickers-file)")
+    p.add_argument("--tickers-file", default=DEFAULT_TICKERS_FILE,
+                   help="File of tickers to screen, one per line, # comments allowed "
+                        "(missing file falls back to the built-in seed list)")
     p.add_argument("--sp500-file", help="File of S&P 500 tickers (one per line) for breadth")
     p.add_argument("--max-rows", type=int, default=25, help="Max ranked rows to display")
     p.add_argument(
@@ -75,24 +81,32 @@ def run(args: argparse.Namespace) -> int:
         if args.json_out:
             report_mod.write_json(
                 header, [], regime, config, args.json_out,
+                near_misses=[],
                 meta_extra={
                     "data_source": "yfinance",
                     "tickers_screened": [],
                     "breadth_evaluated": bool(members),
                     "max_rows": args.max_rows,
+                    "rejections_by_reason": {},
                 },
             )
         return 0
 
     # 2/3. Universe --------------------------------------------------------
-    candidates = (
-        [t.strip().upper() for t in args.tickers.split(",")] if args.tickers
-        else DEFAULT_CANDIDATES
-    )
-    passing = universe_mod.build_universe(candidates, provider, config)
+    candidates = _resolve_candidates(args)
+    passing, universe_rejects = universe_mod.build_universe(candidates, provider, config)
 
     dte_cfg, delta_cfg, quality = config["dte"], config["delta"], config["quality"]
     scored_rows = []
+    near_miss_rows = []
+    rejection_counts: dict[str, int] = {}
+
+    def _count(code: str) -> None:
+        rejection_counts[code] = rejection_counts.get(code, 0) + 1
+
+    for _ in universe_rejects:
+        _count("universe")
+
     for f in passing:
         ticker = f["ticker"]
         spot = f.get("price")
@@ -101,6 +115,7 @@ def run(args: argparse.Namespace) -> int:
             spot = hist[-1]["close"] if hist else None
         if not spot:
             log.info("skip %s: no spot price", ticker)
+            _count("no_spot")
             continue
 
         # 4. Nearest-delta put
@@ -111,6 +126,7 @@ def run(args: argparse.Namespace) -> int:
         )
         if not put:
             log.info("skip %s: no put in delta/DTE window", ticker)
+            _count("no_put_in_window")
             continue
 
         # 5. Earnings + quality filters
@@ -118,21 +134,43 @@ def run(args: argparse.Namespace) -> int:
         ok, reason = screen_mod.passes_earnings_filter(
             put["expiration"], next_earn, avoid=quality["avoid_earnings_before_expiry"]
         )
+        rejections: list[dict[str, str]] = []
+        flags: list[dict[str, str]] = []
         if not ok:
-            log.info("reject %s: %s", ticker, reason)
-            continue
-        rejections = screen_mod.apply_quality_filters(put, spot, quality)
-        if rejections:
-            log.info("reject %s: %s", ticker, "; ".join(rejections))
+            rejections.append({"code": "earnings", "message": reason or "spans earnings"})
+        elif reason:
+            flags.append({"code": "earnings_unknown", "message": reason})
+        q_rejections, q_flags = screen_mod.apply_quality_filters(put, spot, quality)
+        rejections += q_rejections
+        flags += q_flags
+
+        # Contracts without a usable premium/strike/DTE can't be sized or scored
+        # at all — count them, but they don't make meaningful near-miss rows.
+        unsizeable = {"no_premium", "missing_strike_dte"}
+        if any(e["code"] in unsizeable for e in rejections):
+            log.info("reject %s: %s", ticker, "; ".join(e["message"] for e in rejections))
+            for e in rejections:
+                _count(e["code"])
             continue
 
-        # 6. Sizing
+        # 6. Sizing + 7. Score — near-misses too, so they carry the full row shape.
         candidate = {**put, "ticker": ticker, "sector": f.get("sector", "Unknown")}
         sized = size_mod.size_candidate(candidate, account, config)
-        # 7. Score
-        scored_rows.append(score_mod.score_candidate(sized, config, spot))
+        scored = score_mod.score_candidate(sized, config, spot)
+
+        if rejections or flags:
+            log.info("reject %s: %s", ticker,
+                     "; ".join(e["message"] for e in rejections + flags))
+            for e in rejections or flags:
+                _count(e["code"])
+            near_miss_rows.append(
+                {**scored, "rejection_reasons": rejections, "data_flags": flags}
+            )
+        else:
+            scored_rows.append(scored)
 
     ranked = score_mod.rank(scored_rows)[: args.max_rows]
+    near_misses = score_mod.rank(near_miss_rows)[: args.max_rows]
 
     # B1 capital sanity check
     warn = size_mod.sanity_check_capital([r["strike"] for r in scored_rows], config)
@@ -147,19 +185,36 @@ def run(args: argparse.Namespace) -> int:
     if args.json_out:
         jout = report_mod.write_json(
             header, ranked, regime, config, args.json_out,
+            near_misses=near_misses,
             meta_extra={
                 "data_source": "yfinance",
                 "tickers_screened": candidates,
                 "breadth_evaluated": bool(members),
                 "max_rows": args.max_rows,
+                "rejections_by_reason": rejection_counts,
             },
         )
         print(f"Wrote run snapshot to {jout}")
     return 0
 
 
+def _resolve_candidates(args: argparse.Namespace) -> list[str]:
+    """--tickers (explicit) > --tickers-file (if it exists) > built-in seed."""
+    if args.tickers:
+        return [t.strip().upper() for t in args.tickers.split(",") if t.strip()]
+    tickers_file = getattr(args, "tickers_file", None)
+    if tickers_file and Path(tickers_file).exists():
+        return _load_lines(tickers_file)
+    return DEFAULT_CANDIDATES
+
+
 def _load_lines(path: str) -> list[str]:
-    return [ln.strip().upper() for ln in Path(path).read_text().splitlines() if ln.strip()]
+    lines = []
+    for ln in Path(path).read_text().splitlines():
+        ln = ln.split("#", 1)[0].strip()
+        if ln:
+            lines.append(ln.upper())
+    return lines
 
 
 def main(argv: list[str] | None = None) -> int:

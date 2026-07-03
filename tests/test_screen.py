@@ -56,10 +56,15 @@ def _quality(config):
     return config["quality"]
 
 
+def _reject_codes(opt, spot, q):
+    rejections, _ = screen.apply_quality_filters(opt, spot, q)
+    return [r["code"] for r in rejections]
+
+
 def test_quality_passes_good_contract(config):
     good = {"strike": 95.0, "mid": 1.35, "dte": 35, "iv": 0.24,
             "bid": 1.30, "ask": 1.40, "open_interest": 2500}
-    assert screen.apply_quality_filters(good, spot=100.0, quality=_quality(config)) == []
+    assert screen.apply_quality_filters(good, spot=100.0, quality=_quality(config)) == ([], [])
 
 
 def test_quality_rejects_each_failure(config):
@@ -67,16 +72,52 @@ def test_quality_rejects_each_failure(config):
     # wide spread
     bad_spread = {"strike": 95.0, "mid": 1.0, "dte": 35, "iv": 0.24,
                   "bid": 0.50, "ask": 1.50, "open_interest": 2500}
-    assert any("spread" in r for r in screen.apply_quality_filters(bad_spread, 100.0, q))
+    assert "spread" in _reject_codes(bad_spread, 100.0, q)
     # low OI
     bad_oi = {"strike": 95.0, "mid": 1.0, "dte": 35, "iv": 0.24,
               "bid": 0.95, "ask": 1.05, "open_interest": 10}
-    assert any("OI" in r for r in screen.apply_quality_filters(bad_oi, 100.0, q))
-    # too close to strike (strike 99 vs spot 100 -> 1% < 5%)
+    assert "open_interest" in _reject_codes(bad_oi, 100.0, q)
+    # too close to strike (strike 99 vs spot 100 -> 1% < 3%)
     too_close = {"strike": 99.0, "mid": 1.0, "dte": 35, "iv": 0.24,
                  "bid": 0.95, "ask": 1.05, "open_interest": 2500}
-    assert any("distance" in r for r in screen.apply_quality_filters(too_close, 100.0, q))
+    assert "distance" in _reject_codes(too_close, 100.0, q)
     # huge implied move
     big_iv = {"strike": 95.0, "mid": 1.0, "dte": 35, "iv": 1.5,
               "bid": 0.95, "ask": 1.05, "open_interest": 2500}
-    assert any("implied move" in r for r in screen.apply_quality_filters(big_iv, 100.0, q))
+    assert "implied_move" in _reject_codes(big_iv, 100.0, q)
+
+
+def test_quality_missing_data_becomes_flags_not_silent_pass(config):
+    q = _quality(config)
+    base = {"strike": 95.0, "mid": 1.35, "dte": 35, "iv": 0.24,
+            "bid": 1.30, "ask": 1.40, "open_interest": 2500}
+    for field, code in (("iv", "iv_missing"), ("bid", "spread_unknown"),
+                        ("open_interest", "oi_unknown")):
+        rejections, flags = screen.apply_quality_filters({**base, field: None}, 100.0, q)
+        assert rejections == []
+        assert [f["code"] for f in flags] == [code]
+
+
+def test_quality_tight_absolute_spread_rescues_low_premium(config):
+    # $0.08 wide on a $0.50 mid is 16% of mid (> max_spread_pct) but well inside
+    # max_spread_abs — an acceptable market for a low-premium contract.
+    q = _quality(config)
+    opt = {"strike": 90.0, "mid": 0.50, "dte": 35, "iv": 0.20,
+           "bid": 0.46, "ask": 0.54, "open_interest": 500}
+    assert "spread" not in _reject_codes(opt, 100.0, q)
+
+
+def test_quality_wide_absolute_spread_still_rejects(config):
+    q = _quality(config)
+    opt = {"strike": 95.0, "mid": 1.0, "dte": 35, "iv": 0.24,
+           "bid": 0.75, "ask": 1.25, "open_interest": 500}
+    assert "spread" in _reject_codes(opt, 100.0, q)
+
+
+def test_quality_recalibrated_gates_pass_low_iv_megacap(config):
+    # Regression pin for the recalibration: a KO-like low-IV name at ~0.2 delta
+    # (strike 4% below spot, IV 16%, modest premium) must pass every gate.
+    q = _quality(config)
+    opt = {"strike": 96.0, "mid": 0.60, "dte": 35, "iv": 0.16,
+           "bid": 0.55, "ask": 0.65, "open_interest": 500}
+    assert screen.apply_quality_filters(opt, spot=100.0, quality=q) == ([], [])

@@ -27,7 +27,11 @@ class ConfigError(RuntimeError):
 
 @dataclass
 class Secrets:
-    fmp_api_key: str | None = None
+    """No secrets are currently required (yfinance needs no credentials).
+
+    The dataclass and ``load_secrets`` stay so the ``DataProvider(config,
+    secrets)`` signature is stable when a keyed data source is added later.
+    """
 
 
 def load_config(path: str | os.PathLike[str] | None = None) -> dict[str, Any]:
@@ -44,18 +48,12 @@ def load_config(path: str | os.PathLike[str] | None = None) -> dict[str, Any]:
 
 
 def load_secrets(env_path: str | os.PathLike[str] | None = None) -> Secrets:
-    """Load optional secrets from .env / environment.
-
-    Option-chain data now comes from yfinance, which needs no credentials, so no
-    secret is required. ``FMP_API_KEY`` remains optional for enhanced fundamentals.
-    """
+    """Load secrets from .env / environment (currently none are needed)."""
     if load_dotenv is not None:
         # load_dotenv is a no-op if the file doesn't exist.
         load_dotenv(env_path or (ROOT / ".env"))
 
-    return Secrets(
-        fmp_api_key=(os.environ.get("FMP_API_KEY") or "").strip() or None,
-    )
+    return Secrets()
 
 
 # Keys that look like secrets and must never appear in config.yaml.

@@ -15,9 +15,13 @@ const fmtPct = (x) => (x == null ? "—" : (x * 100).toFixed(1) + "%");
 const fmtUsd = (x) => (x == null ? "—" : "$" + Math.round(x).toLocaleString());
 const fmtNum = (x, d = 2) => (x == null ? "—" : Number(x).toFixed(d));
 
-Chart.defaults.color = COLORS.muted;
-Chart.defaults.borderColor = COLORS.grid;
-Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+// If the Chart.js CDN failed, degrade to tables/cards instead of a blank page.
+const HAS_CHART = typeof Chart !== "undefined";
+if (HAS_CHART) {
+  Chart.defaults.color = COLORS.muted;
+  Chart.defaults.borderColor = COLORS.grid;
+  Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+}
 
 async function fetchJson(path) {
   const res = await fetch(path, { cache: "no-store" });
@@ -46,16 +50,29 @@ function renderRegime(doc) {
     ? "Signals tripped: " + tripped.join(", ")
     : "No risk signals tripped.";
   const ts = doc.meta && doc.meta.generated_at;
-  $("#generated-at").textContent = ts ? "Generated " + new Date(ts).toLocaleString() : "";
+  const el = $("#generated-at");
+  el.textContent = ts ? "Generated " + new Date(ts).toLocaleString() : "";
+  // Freshness badge: >96h covers a weekend + Monday holiday before crying stale.
+  if (ts) {
+    const ageHours = (Date.now() - new Date(ts).getTime()) / 3600e3;
+    if (ageHours > 96) {
+      el.insertAdjacentHTML("beforeend", `<span class="badge-stale" title="Last run is ${Math.round(ageHours / 24)} days old — the scheduled screener may be failing.">STALE</span>`);
+    } else if (ageHours > 30) {
+      el.insertAdjacentHTML("beforeend", `<span class="badge-not-today">not today</span>`);
+    }
+  }
 }
 
 function renderCards(doc) {
   const h = doc.header || {};
+  const nearMissCount = (doc.near_misses || []).length;
+  const candidates = String((doc.rows || []).length) +
+    (nearMissCount ? ` (+${nearMissCount} near miss${nearMissCount > 1 ? "es" : ""})` : "");
   const cards = [
     ["Total capital", fmtUsd(h.total_capital)],
     ["Deployed", `${fmtUsd(h.deployed)} (${fmtPct(h.pct_deployed)})`],
     ["Remaining cash", fmtUsd(h.remaining_cash)],
-    ["Candidates", String((doc.rows || []).length)],
+    ["Candidates", candidates],
     ["Positions", h.positions_source || "—"],
   ];
   $("#capital-cards").innerHTML = cards
@@ -106,7 +123,48 @@ function wireTableSort() {
   });
 }
 
+function renderNearMisses(doc) {
+  const rows = doc.near_misses || [];
+  const section = $("#near-miss-section");
+  if (!rows.length) { section.classList.add("hidden"); return; }
+  section.classList.remove("hidden");
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+  const badge = (cls) => (e) =>
+    `<span class="${cls}" title="${esc(e.message || "")}">${esc(e.code || "?")}</span>`;
+  $("#near-misses tbody").innerHTML = rows.map((r) => `<tr>
+      <td>${r.ticker ?? ""}</td>
+      <td>${r.sector ?? ""}</td>
+      <td>${r.expiration ?? ""}</td>
+      <td class="num">${r.dte ?? ""}</td>
+      <td class="num">${fmtNum(r.strike)}</td>
+      <td class="num">${fmtNum(r.mid)}</td>
+      <td class="num">${fmtPct(r.annualized_yield)}</td>
+      <td class="num">${fmtPct(r.distance_to_strike)}</td>
+      <td class="num">${fmtNum(r.score, 3)}</td>
+      <td>${(r.rejection_reasons || []).map(badge("badge-reject")).join("")}${(r.data_flags || []).map(badge("badge-flag")).join("")}</td>
+    </tr>`).join("");
+}
+
+function renderRejectionChart(doc) {
+  if (!HAS_CHART) return;
+  const counts = (doc.meta && doc.meta.rejections_by_reason) || {};
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const card = $("#chart-rejections-card");
+  destroyChart("chart-rejections");
+  if (!entries.length) { card.classList.add("hidden"); return; }
+  card.classList.remove("hidden");
+  charts["chart-rejections"] = new Chart($("#chart-rejections"), {
+    type: "bar",
+    data: { labels: entries.map(([k]) => k),
+      datasets: [{ data: entries.map(([, v]) => v), backgroundColor: COLORS.yellow }] },
+    options: { indexAxis: "y", plugins: { legend: { display: false } },
+      scales: { x: { grid: { color: COLORS.grid }, ticks: { precision: 0 } },
+        y: { grid: { display: false } } } },
+  });
+}
+
 function renderRunCharts(doc) {
+  if (!HAS_CHART) return;
   const rows = doc.rows || [];
 
   // Top candidates by score (horizontal bar)
@@ -169,6 +227,8 @@ function renderRun(doc) {
   renderCards(doc);
   tableState.rows = doc.rows || [];
   renderTable();
+  renderNearMisses(doc);
+  renderRejectionChart(doc);
   renderRunCharts(doc);
 
   const t = doc.thresholds || {};
@@ -180,7 +240,9 @@ function renderRun(doc) {
 
 // -------------------------------------------------------------- history render
 function renderHistory(index) {
-  const runs = (index.runs || []).filter((r) => r.date);
+  if (!HAS_CHART) return;
+  // Demo seed runs would mix fake scores into the real time-series.
+  const runs = (index.runs || []).filter((r) => r.date && !r.demo);
   const labels = runs.map((r) => r.date);
 
   destroyChart("hist-regime");
@@ -205,8 +267,23 @@ function renderHistory(index) {
     });
   };
   line("#hist-top-score", runs.map((r) => r.top_score), "Top score", COLORS.accent);
-  line("#hist-count", runs.map((r) => r.row_count), "Candidates", COLORS.green);
   line("#hist-deployed", runs.map((r) => (r.pct_deployed || 0) * 100), "% deployed", COLORS.yellow);
+
+  // Candidates + near misses share one chart; old index rows lack near_miss_count.
+  destroyChart("#hist-count");
+  charts["#hist-count"] = new Chart($("#hist-count"), {
+    type: "line",
+    data: { labels, datasets: [
+      { label: "Candidates", data: runs.map((r) => r.row_count),
+        borderColor: COLORS.green, backgroundColor: COLORS.green, tension: 0.2, pointRadius: 3 },
+      { label: "Near misses", data: runs.map((r) => r.near_miss_count ?? null),
+        borderColor: COLORS.muted, backgroundColor: COLORS.muted,
+        borderDash: [6, 4], tension: 0.2, pointRadius: 3 },
+    ] },
+    options: { plugins: { legend: { display: true, position: "bottom" } },
+      scales: { x: { grid: { color: COLORS.grid } },
+        y: { grid: { color: COLORS.grid }, ticks: { precision: 0 } } } },
+  });
 }
 
 // ------------------------------------------------------------------- bootstrap

@@ -3,6 +3,8 @@
 > Status: **Planning / review** — no screener code has been written yet. This document is the
 > analysis of the original spec plus a corrected build plan, for review before building.
 
+> **Superseded note (2026-07):** the Tradier option-chain source described in this historical document was replaced by yfinance (no `TRADIER_TOKEN` or any credential is needed); the optional FMP fundamentals key was likewise removed as it was never wired up. References to Tradier/FMP/`TRADIER_TOKEN` below are kept for historical context only.
+
 ## Context
 
 A detailed spec was written for a "boring wheel" cash-secured-put (CSP) / covered-call screener.
