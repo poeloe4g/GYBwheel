@@ -34,6 +34,12 @@ quality:
   min_open_interest: 50
   min_distance_to_strike: 0.03     # (spot-strike)/spot; a 0.2-delta strike at IV~15% sits only ~4% below spot
   avoid_earnings_before_expiry: true   # B2
+  # When the earnings date can't be determined from any feed:
+  #   flag      — otherwise-clean candidates reach the main table with a visible
+  #               earnings_unknown flag (verify the date manually before trading)
+  #   near_miss — demote to the near-miss table (strict; previous behavior)
+  #   reject    — treat as a hard gate failure
+  unknown_earnings_policy: flag
   risk_free_rate: 0.04                 # B9
   score_denominator_floor: 0.01        # B4 guard
 

@@ -92,6 +92,59 @@ def normalize_yf_fundamentals(ticker: str, info: dict[str, Any]) -> dict[str, An
     }
 
 
+def _coerce_date(v: Any) -> date | None:
+    """Best-effort conversion of yfinance date shapes (Timestamp/datetime/date/str)."""
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, date):
+        return v
+    if hasattr(v, "date"):  # pandas.Timestamp without importing pandas
+        try:
+            return v.date()
+        except (TypeError, ValueError):
+            return None
+    try:
+        return datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _next_future_iso(dates: list[date | None], today: date) -> str | None:
+    future = [d for d in dates if d is not None and d >= today]
+    return min(future).isoformat() if future else None
+
+
+def _earnings_from_calendar(cal: Any, today: date) -> str | None:
+    """Next earnings date from ``yf.Ticker.calendar``.
+
+    Current yfinance returns a dict whose "Earnings Date" is a list of dates;
+    older versions returned a DataFrame with an "Earnings Date" row. Both are
+    handled; anything unparseable degrades to None.
+    """
+    if cal is None:
+        return None
+    raw: Any = None
+    if isinstance(cal, dict):
+        raw = cal.get("Earnings Date")
+    else:  # legacy DataFrame shape
+        try:
+            raw = list(cal.loc["Earnings Date"])
+        except Exception:  # noqa: BLE001 — shape varies across yfinance versions
+            return None
+    if raw is None:
+        return None
+    if not isinstance(raw, (list, tuple)):
+        raw = [raw]
+    return _next_future_iso([_coerce_date(v) for v in raw], today)
+
+
+def _earnings_from_dates(index_dates: list[Any], today: date) -> str | None:
+    """Next earnings date from a ``get_earnings_dates`` DataFrame index."""
+    return _next_future_iso([_coerce_date(v) for v in index_dates], today)
+
+
 def dte_for(expiration: str, today: date | None = None) -> int:
     today = today or date.today()
     exp = datetime.strptime(expiration, "%Y-%m-%d").date()
@@ -210,19 +263,30 @@ class DataProvider:
 
         import yfinance as yf
 
-        def call() -> str | None:
-            df = yf.Ticker(ticker).get_earnings_dates(limit=8)
-            if df is None or df.empty:
-                return None
-            today = date.today()
-            future = [idx.date() for idx in df.index if idx.date() >= today]
-            return min(future).isoformat() if future else None
+        today = date.today()
 
-        try:
-            nxt = with_backoff(call, max_retries=self.max_retries, is_transient=_is_rate_limited)
-        except Exception:  # noqa: BLE001 — earnings missing must degrade gracefully (B2)
-            nxt = None
-        self.cache.set("earnings", ticker, {"date": nxt})
+        def from_calendar() -> str | None:
+            return _earnings_from_calendar(yf.Ticker(ticker).calendar, today)
+
+        def from_dates() -> str | None:
+            df = yf.Ticker(ticker).get_earnings_dates(limit=8)
+            if df is None or getattr(df, "empty", True):
+                return None
+            return _earnings_from_dates(list(df.index), today)
+
+        # Two independent sources: calendar (lighter call) first, the earnings
+        # history second. Either failing must degrade gracefully (B2); the
+        # cached source records which feed answered, "unavailable" when neither.
+        nxt, source = None, "unavailable"
+        for name, fn in (("calendar", from_calendar), ("earnings_dates", from_dates)):
+            try:
+                nxt = with_backoff(fn, max_retries=self.max_retries, is_transient=_is_rate_limited)
+            except Exception:  # noqa: BLE001
+                nxt = None
+            if nxt:
+                source = name
+                break
+        self.cache.set("earnings", ticker, {"date": nxt, "source": source})
         return nxt
 
     def get_breadth(self, members: list[str] | None = None) -> float | None:

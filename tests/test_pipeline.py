@@ -1,6 +1,7 @@
 """Golden-path / RED short-circuit integration (F12), fully offline."""
 import argparse
 import json
+from pathlib import Path
 
 from cache import DiskCache
 import main as main_mod
@@ -27,6 +28,10 @@ class FakeProvider:
             "NOIV": {"ticker": "NOIV", "market_cap": 5e11, "avg_volume": 5e6,
                      "net_income": 3e10, "free_cash_flow": 2.5e10,
                      "sector": "Healthcare", "has_options": True, "price": 100.0},
+            # NOEARN passes every gate but the earnings date is unknown.
+            "NOEARN": {"ticker": "NOEARN", "market_cap": 5e11, "avg_volume": 5e6,
+                       "net_income": 3e10, "free_cash_flow": 2.5e10,
+                       "sector": "Industrials", "has_options": True, "price": 100.0},
         }
 
     def get_price_history(self, ticker, period="1y"):
@@ -57,6 +62,8 @@ class FakeProvider:
         return put
 
     def get_next_earnings(self, ticker):
+        if ticker == "NOEARN":
+            return None  # feed failure -> earnings_unknown flag
         return "2099-12-31"  # far away — never blocks
 
 
@@ -80,7 +87,7 @@ def test_red_regime_short_circuits(tmp_path, monkeypatch, capsys):
     assert not (tmp_path / "out.csv").exists()  # stopped before writing
     # RED days still appear on the dashboard timeline, with no candidates.
     doc = json.loads(json_out.read_text())
-    assert doc["schema_version"] == 2
+    assert doc["schema_version"] == 3
     assert doc["regime"]["light"] == "RED"
     assert doc["rows"] == []
     assert doc["near_misses"] == []
@@ -104,7 +111,7 @@ def test_green_end_to_end_writes_csv(tmp_path, monkeypatch, capsys):
 
     # JSON snapshot mirrors the run for the dashboard.
     doc = json.loads(json_out.read_text())
-    assert doc["schema_version"] == 2
+    assert doc["schema_version"] == 3
     assert doc["regime"]["light"] == "GREEN"
     assert set(doc["regime"]["signals"]) == {
         "spy_below_200dma", "breadth_below_floor", "vix_high_and_spy_falling"}
@@ -143,3 +150,83 @@ def test_near_misses_captured_with_reasons(tmp_path, monkeypatch):
     # Near misses never leak into the CSV.
     csv_text = (tmp_path / "out.csv").read_text()
     assert "WIDE" not in csv_text and "NOIV" not in csv_text
+
+
+def _config_with_policy(tmp_path, policy):
+    """The shipped config with quality.unknown_earnings_policy overridden."""
+    import yaml
+
+    cfg = yaml.safe_load(Path("config.yaml").read_text())
+    cfg["quality"]["unknown_earnings_policy"] = policy
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump(cfg))
+    return str(path)
+
+
+def test_unknown_earnings_promoted_with_flag(tmp_path, monkeypatch):
+    """Default policy=flag: a clean row with only earnings_unknown is a candidate."""
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c")))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, tickers="MEGA,NOEARN", json_out=str(json_out)))
+    assert rc == 0
+
+    doc = json.loads(json_out.read_text())
+    assert doc["schema_version"] == 3
+    rows = {r["ticker"]: r for r in doc["rows"]}
+    assert set(rows) == {"MEGA", "NOEARN"}
+    assert rows["MEGA"]["data_flags"] == []
+    assert [e["code"] for e in rows["NOEARN"]["data_flags"]] == ["earnings_unknown"]
+    assert rows["NOEARN"]["spot"] == 100.0
+    assert doc["near_misses"] == []
+    # Promoted flags are accounted as flags, not rejections.
+    assert doc["meta"]["rejections_by_reason"] == {}
+    assert doc["meta"]["flags_by_reason"] == {"earnings_unknown": 1}
+    assert doc["thresholds"]["unknown_earnings_policy"] == "flag"
+    # The flag is visible in the CSV.
+    csv_rows = (tmp_path / "out.csv").read_text().splitlines()
+    assert "flags" in csv_rows[0]
+    assert any("NOEARN" in ln and "earnings_unknown" in ln for ln in csv_rows[1:])
+
+
+def test_unknown_earnings_policy_near_miss_demotes(tmp_path, monkeypatch):
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c")))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, tickers="NOEARN", json_out=str(json_out),
+                            config=_config_with_policy(tmp_path, "near_miss")))
+    assert rc == 0
+    doc = json.loads(json_out.read_text())
+    assert doc["rows"] == []
+    near = doc["near_misses"][0]
+    assert near["ticker"] == "NOEARN"
+    assert near["rejection_reasons"] == []
+    assert [e["code"] for e in near["data_flags"]] == ["earnings_unknown"]
+    assert doc["meta"]["rejections_by_reason"] == {"earnings_unknown": 1}
+
+
+def test_unknown_earnings_policy_reject_hard_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c")))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, tickers="NOEARN", json_out=str(json_out),
+                            config=_config_with_policy(tmp_path, "reject")))
+    assert rc == 0
+    doc = json.loads(json_out.read_text())
+    assert doc["rows"] == []
+    near = doc["near_misses"][0]
+    assert [e["code"] for e in near["rejection_reasons"]] == ["earnings_unknown"]
+    assert near["data_flags"] == []
+
+
+def test_unknown_earnings_policy_bad_value_falls_back(tmp_path, monkeypatch):
+    """An invalid policy value degrades to strict near_miss, not a crash."""
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c")))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, tickers="NOEARN", json_out=str(json_out),
+                            config=_config_with_policy(tmp_path, "bogus")))
+    assert rc == 0
+    doc = json.loads(json_out.read_text())
+    assert doc["rows"] == []
+    assert doc["near_misses"][0]["ticker"] == "NOEARN"

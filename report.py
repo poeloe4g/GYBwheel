@@ -13,17 +13,24 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-# v2 is additive over v1: top-level ``near_misses`` plus ``meta.near_miss_count``
-# and ``meta.rejections_by_reason``. Readers must treat v2 fields as optional and
-# never gate on the version number.
-SCHEMA_VERSION = 2
+# Versions are additive; readers must treat newer fields as optional and never
+# gate on the version number.
+#   v2: top-level ``near_misses``, ``meta.near_miss_count``,
+#       ``meta.rejections_by_reason``.
+#   v3: candidate rows may carry ``data_flags`` (policy-promoted flags) and
+#       ``spot``; ``meta.flags_by_reason``; ``thresholds.unknown_earnings_policy``.
+SCHEMA_VERSION = 3
 
 CSV_COLUMNS = [
     "ticker", "sector", "expiration", "dte", "strike", "mid", "abs_delta",
     "roc", "annualized_yield", "yield_30dte", "distance_to_strike", "implied_move",
     "score", "max_contracts", "collateral_per_contract",
-    "breaches_per_name_cap", "min_account_for_1_contract",
+    "breaches_per_name_cap", "min_account_for_1_contract", "flags",
 ]
+
+
+def _flag_codes(row: dict[str, Any]) -> str:
+    return ";".join(e.get("code", "?") for e in row.get("data_flags") or [])
 
 
 def build_header(regime: Any, account: Any, config: dict[str, Any]) -> dict[str, Any]:
@@ -65,6 +72,9 @@ def render_console(header: dict[str, Any], rows: list[dict[str, Any]]) -> str:
         flags = "BREACH" if r.get("breaches_per_name_cap") else ""
         if flags:
             flags += f" min_acct=${r.get('min_account_for_1_contract',0):,.0f}"
+        codes = _flag_codes(r)
+        if codes:
+            flags = f"{flags} {codes}".strip()
         lines.append(
             f"{r.get('ticker',''):<7}{r.get('expiration',''):<12}{r.get('dte',0):>4}"
             f"{r.get('strike',0):>9.2f}{r.get('mid',0):>7.2f}{r.get('abs_delta',0):>6.2f}"
@@ -80,7 +90,7 @@ def write_csv(rows: list[dict[str, Any]], path: str | Path) -> Path:
         writer = csv.DictWriter(fh, fieldnames=CSV_COLUMNS, extrasaction="ignore")
         writer.writeheader()
         for r in rows:
-            writer.writerow(r)
+            writer.writerow({**r, "flags": _flag_codes(r)})
     return path
 
 
@@ -148,6 +158,7 @@ def write_json(
             "regime": config.get("regime"),
             "account": config.get("account"),
             "avoid_earnings_before_expiry": quality.get("avoid_earnings_before_expiry"),
+            "unknown_earnings_policy": quality.get("unknown_earnings_policy"),
         },
         "rows": rows,
         "near_misses": near_misses,

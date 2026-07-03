@@ -14,6 +14,9 @@ const $ = (sel) => document.querySelector(sel);
 const fmtPct = (x) => (x == null ? "—" : (x * 100).toFixed(1) + "%");
 const fmtUsd = (x) => (x == null ? "—" : "$" + Math.round(x).toLocaleString());
 const fmtNum = (x, d = 2) => (x == null ? "—" : Number(x).toFixed(d));
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+const badge = (cls) => (e) =>
+  `<span class="${cls}" title="${esc(e.message || "")}">${esc(e.code || "?")}</span>`;
 
 // If the Chart.js CDN failed, degrade to tables/cards instead of a blank page.
 const HAS_CHART = typeof Chart !== "undefined";
@@ -91,9 +94,9 @@ function renderTable() {
     return dir * (av - bv);
   });
   tbody.innerHTML = sorted.map((r) => {
-    const flag = r.breaches_per_name_cap
+    const flag = (r.breaches_per_name_cap
       ? `<span class="badge-breach" title="Min account ${fmtUsd(r.min_account_for_1_contract)}">BREACH</span>`
-      : "";
+      : "") + (r.data_flags || []).map(badge("badge-flag")).join("");
     return `<tr>
       <td>${r.ticker ?? ""}</td>
       <td>${r.sector ?? ""}</td>
@@ -128,9 +131,6 @@ function renderNearMisses(doc) {
   const section = $("#near-miss-section");
   if (!rows.length) { section.classList.add("hidden"); return; }
   section.classList.remove("hidden");
-  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-  const badge = (cls) => (e) =>
-    `<span class="${cls}" title="${esc(e.message || "")}">${esc(e.code || "?")}</span>`;
   $("#near-misses tbody").innerHTML = rows.map((r) => `<tr>
       <td>${r.ticker ?? ""}</td>
       <td>${r.sector ?? ""}</td>
@@ -235,7 +235,8 @@ function renderRun(doc) {
   const dte = t.dte || {}, delta = t.delta || {};
   $("#thresholds-summary").textContent =
     `Thresholds — DTE ${dte.min}-${dte.max} (target ${dte.target}), ` +
-    `|Δ| ${delta.min}-${delta.max} (target ${delta.target}), scoring: ${t.scoring_mode || "—"}.`;
+    `|Δ| ${delta.min}-${delta.max} (target ${delta.target}), scoring: ${t.scoring_mode || "—"}` +
+    (t.unknown_earnings_policy ? `, unknown earnings: ${t.unknown_earnings_policy}` : "") + ".";
 }
 
 // -------------------------------------------------------------- history render

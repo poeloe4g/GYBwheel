@@ -88,6 +88,7 @@ def run(args: argparse.Namespace) -> int:
                     "breadth_evaluated": bool(members),
                     "max_rows": args.max_rows,
                     "rejections_by_reason": {},
+                    "flags_by_reason": {},
                 },
             )
         return 0
@@ -97,12 +98,17 @@ def run(args: argparse.Namespace) -> int:
     passing, universe_rejects = universe_mod.build_universe(candidates, provider, config)
 
     dte_cfg, delta_cfg, quality = config["dte"], config["delta"], config["quality"]
+    earnings_policy = _resolve_earnings_policy(quality)
     scored_rows = []
     near_miss_rows = []
     rejection_counts: dict[str, int] = {}
+    flag_counts: dict[str, int] = {}
 
     def _count(code: str) -> None:
         rejection_counts[code] = rejection_counts.get(code, 0) + 1
+
+    def _count_flag(code: str) -> None:
+        flag_counts[code] = flag_counts.get(code, 0) + 1
 
     for _ in universe_rejects:
         _count("universe")
@@ -144,6 +150,11 @@ def run(args: argparse.Namespace) -> int:
         rejections += q_rejections
         flags += q_flags
 
+        if earnings_policy == "reject":
+            for e in [f for f in flags if f["code"] == "earnings_unknown"]:
+                flags.remove(e)
+                rejections.append(e)
+
         # Contracts without a usable premium/strike/DTE can't be sized or scored
         # at all — count them, but they don't make meaningful near-miss rows.
         unsizeable = {"no_premium", "missing_strike_dte"}
@@ -154,11 +165,21 @@ def run(args: argparse.Namespace) -> int:
             continue
 
         # 6. Sizing + 7. Score — near-misses too, so they carry the full row shape.
-        candidate = {**put, "ticker": ticker, "sector": f.get("sector", "Unknown")}
+        candidate = {**put, "ticker": ticker, "sector": f.get("sector", "Unknown"),
+                     "spot": spot}
         sized = size_mod.size_candidate(candidate, account, config)
         scored = score_mod.score_candidate(sized, config, spot)
 
-        if rejections or flags:
+        # Flags-only rows whose every flag is the earnings one are promotable
+        # under policy=flag; all other flags (iv_missing, spread_unknown,
+        # oi_unknown) keep the near-miss route — they never pass silently.
+        promotable = (
+            earnings_policy == "flag"
+            and not rejections
+            and flags
+            and all(e["code"] == "earnings_unknown" for e in flags)
+        )
+        if rejections or (flags and not promotable):
             log.info("reject %s: %s", ticker,
                      "; ".join(e["message"] for e in rejections + flags))
             for e in rejections or flags:
@@ -167,7 +188,11 @@ def run(args: argparse.Namespace) -> int:
                 {**scored, "rejection_reasons": rejections, "data_flags": flags}
             )
         else:
-            scored_rows.append(scored)
+            if flags:
+                log.info("flag %s: %s", ticker, "; ".join(e["message"] for e in flags))
+                for e in flags:
+                    _count_flag(e["code"])
+            scored_rows.append({**scored, "data_flags": flags})
 
     ranked = score_mod.rank(scored_rows)[: args.max_rows]
     near_misses = score_mod.rank(near_miss_rows)[: args.max_rows]
@@ -192,10 +217,23 @@ def run(args: argparse.Namespace) -> int:
                 "breadth_evaluated": bool(members),
                 "max_rows": args.max_rows,
                 "rejections_by_reason": rejection_counts,
+                "flags_by_reason": flag_counts,
             },
         )
         print(f"Wrote run snapshot to {jout}")
     return 0
+
+
+_EARNINGS_POLICIES = ("flag", "near_miss", "reject")
+
+
+def _resolve_earnings_policy(quality: dict) -> str:
+    policy = str(quality.get("unknown_earnings_policy", "near_miss")).lower()
+    if policy not in _EARNINGS_POLICIES:
+        log.warning("unknown_earnings_policy %r is not one of %s; falling back to near_miss",
+                    policy, "|".join(_EARNINGS_POLICIES))
+        return "near_miss"
+    return policy
 
 
 def _resolve_candidates(args: argparse.Namespace) -> list[str]:
