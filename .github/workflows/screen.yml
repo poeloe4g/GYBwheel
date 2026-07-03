@@ -67,6 +67,13 @@ jobs:
             --json-out "site/data/runs/${RUN_DATE}.json" \
             --output candidates.csv -v
 
+      # Score past runs whose contracts have expired (win = expired above
+      # strike). Idempotent append to outcomes.json; a data hiccup here must
+      # not block publishing today's run.
+      - name: Evaluate outcomes of expired contracts
+        continue-on-error: true
+        run: python scripts/evaluate_outcomes.py --runs site/data/runs --out site/data/outcomes.json
+
       # Only reached if the screener exited 0 — keeps the last good latest.json.
       - name: Rebuild dashboard index + latest
         run: python scripts/build_index.py --data-dir site/data
@@ -83,6 +90,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add site/data/runs/"${RUN_DATE}".json site/data/index.json site/data/latest.json
+          [ -f site/data/outcomes.json ] && git add site/data/outcomes.json || true
           if git diff --cached --quiet; then
             echo "No data changes to commit."
           else

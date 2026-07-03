@@ -105,6 +105,39 @@
       </div>
     </section>
 
+    <!-- Outcomes (appears once the first contracts expire) -->
+    <section id="outcomes-section" class="hidden">
+      <h2>Outcomes</h2>
+      <p class="muted">Resolved contracts from past runs. Win = the put expired with the
+        close above the strike; realized ROC approximates assignment at the expiry close.
+        Near misses are scored too — a rejection reason whose win rate matches the
+        candidates' marks a gate that is too tight.</p>
+      <section class="cards" id="outcome-cards"></section>
+      <div class="chart-grid">
+        <figure class="chart-card hidden" id="chart-outcome-winrate-card">
+          <figcaption>Near-miss win rate by rejection reason</figcaption>
+          <canvas id="chart-outcome-winrate"></canvas></figure>
+      </div>
+      <div class="table-wrap">
+        <table id="outcomes">
+          <thead>
+            <tr>
+              <th>Run</th>
+              <th>Ticker</th>
+              <th>Exp</th>
+              <th class="num">Strike</th>
+              <th class="num">Premium</th>
+              <th class="num">Expiry close</th>
+              <th>Result</th>
+              <th class="num">Realized ROC</th>
+              <th>Group</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- History charts -->
     <section>
       <h2>History</h2>

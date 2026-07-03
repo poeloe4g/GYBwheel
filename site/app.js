@@ -253,6 +253,60 @@ function renderRun(doc) {
     (t.unknown_earnings_policy ? `, unknown earnings: ${t.unknown_earnings_policy}` : "") + ".";
 }
 
+// -------------------------------------------------------------- outcomes render
+function renderOutcomes(doc) {
+  const outcomes = Object.values((doc && doc.outcomes) || {});
+  if (!outcomes.length) return; // section stays hidden until contracts resolve
+  $("#outcomes-section").classList.remove("hidden");
+
+  const s = doc.summary || {};
+  const fmtAgg = (a) => (a && a.n
+    ? `${fmtPct(a.win_rate)} win (${a.wins}/${a.n}), avg ROC ${fmtPct(a.avg_realized_roc)}`
+    : "—");
+  $("#outcome-cards").innerHTML = [
+    ["Candidates", fmtAgg(s.candidates)],
+    ["Near misses", fmtAgg(s.near_misses)],
+  ].map(([l, v]) => `<div class="card"><div class="label">${l}</div><div class="value">${v}</div></div>`)
+    .join("");
+
+  // Win rate per rejection code — the gate-calibration chart.
+  const byCode = Object.entries(s.by_rejection_code || {}).filter(([, a]) => a.n);
+  const card = $("#chart-outcome-winrate-card");
+  if (HAS_CHART && byCode.length) {
+    card.classList.remove("hidden");
+    destroyChart("chart-outcome-winrate");
+    charts["chart-outcome-winrate"] = new Chart($("#chart-outcome-winrate"), {
+      type: "bar",
+      data: { labels: byCode.map(([k, a]) => `${k} (n=${a.n})`),
+        datasets: [{ data: byCode.map(([, a]) => (a.win_rate || 0) * 100),
+          backgroundColor: COLORS.accent }] },
+      options: { indexAxis: "y", plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: (c) => `${c.raw.toFixed(1)}% win rate` } } },
+        scales: { x: { grid: { color: COLORS.grid }, min: 0, max: 100,
+          title: { display: true, text: "Win rate %" } },
+          y: { grid: { display: false } } } },
+    });
+  }
+
+  // Most recently resolved contracts.
+  const recent = [...outcomes]
+    .sort((a, b) => String(b.expiration).localeCompare(String(a.expiration)))
+    .slice(0, 20);
+  $("#outcomes tbody").innerHTML = recent.map((o) => `<tr>
+      <td>${o.run_date ?? ""}</td>
+      <td>${esc(o.ticker ?? "")}</td>
+      <td>${o.expiration ?? ""}</td>
+      <td class="num">${fmtNum(o.strike)}</td>
+      <td class="num">${fmtNum(o.premium)}</td>
+      <td class="num">${fmtNum(o.expiry_close)}</td>
+      <td>${o.win
+        ? `<span class="badge-flag" title="Expired above the strike">WIN</span>`
+        : `<span class="badge-reject" title="Expiry close below the strike">BREACH</span>`}</td>
+      <td class="num">${fmtPct(o.realized_roc)}</td>
+      <td>${o.group === "candidate" ? "candidate" : "near miss"}</td>
+    </tr>`).join("");
+}
+
 // -------------------------------------------------------------- history render
 function renderHistory(index) {
   if (!HAS_CHART) return;
@@ -334,6 +388,8 @@ async function main() {
   }
   renderHistory(index);
   populatePicker(index, loadRun);
+  // Outcomes exist only after the first tracked contracts expire — 404 is fine.
+  fetchJson("data/outcomes.json").then(renderOutcomes).catch(() => {});
   await loadRun(index.latest);
 }
 
