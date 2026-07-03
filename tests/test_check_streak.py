@@ -1,0 +1,43 @@
+"""check_streak unit tests (offline)."""
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
+import check_streak
+
+
+def _run(date, light="GREEN", rows=0, demo=False):
+    return {"date": date, "light": light, "row_count": rows, "demo": demo}
+
+
+def test_streak_counts_trailing_zero_runs():
+    index = {"runs": [_run("d1", rows=3), _run("d2"), _run("d3"), _run("d4")]}
+    assert check_streak.zero_candidate_streak(index) == 3
+
+
+def test_streak_broken_by_candidates():
+    index = {"runs": [_run("d1"), _run("d2", rows=2), _run("d3")]}
+    assert check_streak.zero_candidate_streak(index) == 1
+
+
+def test_streak_skips_red_and_demo_runs():
+    # RED days and demo seeds are neither zero-streak evidence nor breakers.
+    index = {"runs": [_run("d1"), _run("d2", light="RED"), _run("d3"),
+                      _run("d4", rows=5, demo=True), _run("d5")]}
+    assert check_streak.zero_candidate_streak(index) == 3
+
+
+def test_empty_index_is_no_streak():
+    assert check_streak.zero_candidate_streak({"runs": []}) == 0
+    assert check_streak.zero_candidate_streak({}) == 0
+
+
+def test_main_exit_codes(tmp_path, capsys):
+    idx = tmp_path / "index.json"
+    idx.write_text(json.dumps({"runs": [_run("d1"), _run("d2"), _run("d3")]}))
+    assert check_streak.main(["--index", str(idx), "--threshold", "3"]) == 1
+    assert check_streak.main(["--index", str(idx), "--threshold", "4"]) == 0
+    # Missing index must not false-alarm.
+    assert check_streak.main(["--index", str(tmp_path / "nope.json")]) == 0
