@@ -27,11 +27,12 @@ delta:
   max: 0.30
 
 quality:
-  min_yield_30dte: 0.01            # min ROC normalized to 30 DTE
-  max_implied_move: 0.08           # 1σ move over contract life (IV*sqrt(DTE/365))
-  max_spread_pct: 0.10             # (ask-bid)/mid
-  min_open_interest: 100
-  min_distance_to_strike: 0.05     # (spot-strike)/spot
+  min_yield_30dte: 0.005           # min ROC normalized to 30 DTE (~6% annualized floor)
+  max_implied_move: 0.15           # 1σ move over contract life (IV*sqrt(DTE/365)); ~IV<=48% at 35 DTE
+  max_spread_pct: 0.15             # (ask-bid)/mid
+  max_spread_abs: 0.10             # spread passes anyway if (ask-bid) <= this ($), rescues low-premium mids
+  min_open_interest: 50
+  min_distance_to_strike: 0.03     # (spot-strike)/spot; a 0.2-delta strike at IV~15% sits only ~4% below spot
   avoid_earnings_before_expiry: true   # B2
   risk_free_rate: 0.04                 # B9
   score_denominator_floor: 0.01        # B4 guard

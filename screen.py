@@ -93,7 +93,10 @@ def apply_quality_filters(
 
     if bid is not None and ask is not None:
         sp = formulas.spread_pct(bid, ask)
-        if sp > quality["max_spread_pct"]:
+        spread_abs = ask - bid
+        # A tight absolute spread is acceptable even when it is a large share of
+        # a small mid (e.g. a $0.05-wide market on a $0.50 premium).
+        if sp > quality["max_spread_pct"] and spread_abs > quality.get("max_spread_abs", float("inf")):
             reasons.append(f"spread {sp:.4f} > {quality['max_spread_pct']}")
 
     oi = opt.get("open_interest")

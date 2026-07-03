@@ -2,9 +2,11 @@ name: Screen and publish dashboard
 
 on:
   schedule:
-    # 21:15 UTC, Mon–Fri. After the 4pm ET close in both EDT (20:00Z) and
-    # EST (21:00Z). GitHub cron is UTC-only and ignores DST — accept ~1h drift.
-    - cron: "15 21 * * 1-5"
+    # 19:45 UTC, Mon–Fri: 3:45pm ET during EDT, 2:45pm ET during EST — inside
+    # regular market hours either way, so option quotes are live (after-close
+    # yfinance bid/asks are stale/zeroed and blow up the spread gate).
+    # GitHub cron is UTC-only and ignores DST — accept ~1h drift.
+    - cron: "45 19 * * 1-5"
   workflow_dispatch:
     inputs:
       tickers:
