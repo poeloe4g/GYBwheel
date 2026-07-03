@@ -165,6 +165,41 @@ def test_get_next_earnings_unavailable_degrades_to_none(tmp_path, monkeypatch):
     assert provider.cache.get("earnings", "MEGA") == {"date": None, "source": "unavailable"}
 
 
+def test_get_put_candidate_dte_stretch(tmp_path):
+    from datetime import date, timedelta
+
+    exp = (date.today() + timedelta(days=50)).isoformat()  # outside 30-45
+
+    class _Provider(data.DataProvider):
+        def get_expirations(self, ticker):
+            return [exp]
+
+        def get_option_chain(self, ticker, expiration):
+            return [{"option_type": "put", "strike": 92.0, "bid": 1.0, "ask": 1.1,
+                     "mid": 1.05, "delta": -0.20, "iv": 0.24, "open_interest": 500,
+                     "expiration": expiration, "dte": data.dte_for(expiration)}]
+
+    quality = {"min_yield_30dte": 0.005, "max_implied_move": 0.15,
+               "max_spread_pct": 0.15, "max_spread_abs": 0.10,
+               "min_open_interest": 50, "min_distance_to_strike": 0.03,
+               "avoid_earnings_before_expiry": True, "iv_outlier_mult": 2.5}
+    p = _Provider({"data": {"cache_dir": str(tmp_path)}}, None)
+    base = dict(dte_min=30, dte_max=45, target_delta=0.20, delta_min=0.15,
+                delta_max=0.30, quality=quality, next_earnings="2099-12-31")
+
+    # Default: the empty window is reported, never silently widened.
+    assert p.get_put_candidate("X", 110.0, **base)["reason"] == "no_expiry_in_window"
+
+    # Opt-in stretch finds the contract but marks it visibly.
+    res = p.get_put_candidate("X", 110.0, **base, dte_stretch_max=56)
+    assert res["selected"] is not None
+    assert any(e["code"] == "dte_stretched" for e in res["selected"]["flags"])
+
+    # A stretch cap short of the expiry still reports the empty window.
+    assert p.get_put_candidate("X", 110.0, **base,
+                               dte_stretch_max=48)["reason"] == "no_expiry_in_window"
+
+
 def test_cache_roundtrip_and_date_keying(tmp_path):
     c = DiskCache(tmp_path)
     c.set("ns", "key", {"a": 1}, stamp="2026-01-01")

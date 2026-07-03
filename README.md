@@ -36,16 +36,31 @@ credentials, so no API key is required to run. All thresholds live in
    capital; absent ⇒ greenfield, stated in the header.
 3. **Universe** (`universe.py`) — 1.1 fundamental filters + ban/allow list,
    cached weekly.
-4. **Select** (`screen.py`) — nearest-`target_delta` put in the DTE window
-   (`abs(delta)`; Black-Scholes fallback when greeks are absent).
-5. **Filters** (`screen.py`) — earnings avoidance + yield/implied-move/spread/
-   OI/distance quality gates, each with a logged rejection reason.
-6. **Size** (`size.py`) — collateral/ROC/annualized; per-name, per-sector,
-   total-deployed caps. Over-cap names are flagged (`breaches_per_name_cap`)
-   with `min_account_for_1_contract`, never silently dropped.
-7. **Score** (`score.py`) — `annualized_yield × distance ÷ max(implied_move,
+4. **Select + filter** (`screen.evaluate_puts`) — every put in the delta band
+   (`abs(delta)`; Black-Scholes fallback when greeks are absent) is gated
+   first — earnings avoidance against each contract's own expiration, plus
+   yield/implied-move/spread/OI/distance quality gates — then the qualifying
+   contract nearest `target_delta` wins, so one illiquid strike no longer
+   rejects a ticker whose neighbors pass. Every rejection is logged with a
+   reason. Off-hours zeroed/crossed quotes degrade to last-trade mids
+   (`quote_indicative` flag, spread gate skipped); junk per-contract IVs get an
+   `iv_outlier` flag instead of a bogus implied-move rejection. A clean row
+   whose only flag is `earnings_unknown` reaches the main table (visibly
+   flagged) under `quality.unknown_earnings_policy: flag`.
+5. **Size** (`size.py`) — collateral/ROC/annualized; per-name, per-sector,
+   total-deployed caps. Over-cap names are flagged (`breaches_per_name_cap`,
+   `affordable: false`) with `min_account_for_1_contract`, never silently
+   dropped; `account.require_affordable: true` demotes them instead. Smaller
+   accounts can screen `data/universe_affordable.txt` via `--tickers-file`.
+6. **Score** (`score.py`) — `annualized_yield × distance ÷ max(implied_move,
    floor)`, or `annualized_yield_only`; components always exposed.
-8. **Report** (`report.py`) — header + ranked table to console and CSV.
+   `scoring.prefer_affordable` ranks tradeable candidates first.
+7. **Report** (`report.py`) — header + ranked table to console and CSV.
+8. **Outcomes** (`scripts/evaluate_outcomes.py`, run by CI) — once contracts
+   expire, candidates *and* near-misses are scored (win = expired above
+   strike; realized ROC approximates assignment at the expiry close) into
+   `site/data/outcomes.json`. Win-rate by rejection reason is the calibration
+   signal: a gate whose rejects win as often as the candidates is too tight.
 
 ## Modules
 
@@ -70,19 +85,24 @@ analysis, and graphs — to a static webpage.
   market-hours cron (and on-demand via *Run workflow*), then commits a dated
   JSON snapshot.
 - **View:** a no-build static site in `site/` (Chart.js via CDN) reads the JSON and
-  renders the regime banner, capital summary, a ranked candidates table, a
+  renders the regime banner, capital summary (incl. a "Tradeable: N of M" card
+  and the B1 capital warning), a ranked candidates table (flag badges), a
   near-miss table (sized/scored rows that failed a gate, with reason badges),
   per-run charts (top scores, yield-vs-distance, sector allocation, deployment
-  gauge, rejections by reason), and history trends (regime, score, candidate +
-  near-miss counts, % deployed over time). A freshness badge appears when the
-  latest run is over a day (yellow) or four days (red STALE) old.
+  gauge, rejections by reason), an Outcomes section (win-rate cards, win-rate
+  by rejection reason, recent resolutions — appears once contracts expire), and
+  history trends (regime, score, candidate + near-miss counts, % deployed over
+  time). A freshness badge appears when the latest run is over a day (yellow)
+  or four days (red STALE) old, and an OFF-HOURS DATA badge marks runs executed
+  outside regular market hours (`meta.quotes_trusted: false` — such runs are
+  also excluded from the zero-candidate alert streak).
 
-`main.py --json-out PATH` writes one self-contained run snapshot (schema v2:
-regime, header, thresholds, full candidate rows, plus `near_misses` rows with
-`rejection_reasons`/`data_flags` and `meta.rejections_by_reason` counts — v2 is
-additive over v1; readers treat the new fields as optional).
-`scripts/build_index.py` rebuilds `site/data/index.json` + `latest.json` from
-`site/data/runs/*.json`.
+`main.py --json-out PATH` writes one self-contained run snapshot (schema v3 —
+versions are additive and readers never gate on the number; the field list is
+documented in `report.py`). `scripts/build_index.py` rebuilds
+`site/data/index.json` + `latest.json` from `site/data/runs/*.json`;
+`scripts/evaluate_outcomes.py` appends resolved contracts to
+`site/data/outcomes.json` idempotently.
 
 ### One-time repo setup
 1. **Settings → Pages → Source = "GitHub Actions".**

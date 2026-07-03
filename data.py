@@ -231,6 +231,7 @@ class DataProvider:
         self, ticker: str, spot: float, *, dte_min: int, dte_max: int,
         target_delta: float, delta_min: float, delta_max: float,
         quality: dict[str, Any], next_earnings: str | None = None,
+        dte_stretch_max: int | None = None,
     ) -> dict[str, Any]:
         """Fetch in-window expiries and gate-then-select via ``screen.evaluate_puts``.
 
@@ -238,10 +239,22 @@ class DataProvider:
         can count them separately: ``no_expiry_in_window`` (nothing listed in
         the DTE window at all) vs ``no_put_in_band`` (chains fetched but no put
         lands in the delta band).
+
+        ``dte_stretch_max`` (opt-in): monthlies-only names sometimes have no
+        expiration inside [dte_min, dte_max] at all. When set and the window is
+        empty, expiries in (dte_max, dte_stretch_max] are considered instead
+        and every returned contract carries a ``dte_stretched`` flag — visible,
+        never silently treated as in-window (the flag routes to near-miss).
         """
         from screen import evaluate_puts
 
-        expirations = [e for e in self.get_expirations(ticker) if dte_min <= dte_for(e) <= dte_max]
+        all_expirations = self.get_expirations(ticker)
+        expirations = [e for e in all_expirations if dte_min <= dte_for(e) <= dte_max]
+        stretched = False
+        if not expirations and dte_stretch_max:
+            expirations = [e for e in all_expirations
+                           if dte_max < dte_for(e) <= dte_stretch_max]
+            stretched = bool(expirations)
         if not expirations:
             return {"selected": None, "fallback": None, "n_in_band": 0,
                     "n_qualifying": 0, "gate_failures": {},
@@ -255,6 +268,13 @@ class DataProvider:
             risk_free_rate=self.config.get("quality", {}).get("risk_free_rate", 0.04),
             next_earnings=next_earnings,
         )
+        if stretched:
+            flag = {"code": "dte_stretched",
+                    "message": (f"no expiration in {dte_min}-{dte_max} DTE; "
+                                f"stretched to {dte_stretch_max}")}
+            for key in ("selected", "fallback"):
+                if result[key] is not None:
+                    result[key] = {**result[key], "flags": result[key]["flags"] + [flag]}
         if result["selected"] is None and result["fallback"] is None:
             result["reason"] = "no_put_in_band"
         return result

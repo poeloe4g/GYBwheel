@@ -24,6 +24,10 @@ dte:
   target: 35
   min: 30
   max: 45
+  # Opt-in (e.g. 56): when NO expiration lands in [min, max] — monthlies-only
+  # names — consider (max, stretch_max] instead; such contracts carry a
+  # dte_stretched flag and route to near-miss, never silently in-window.
+  stretch_max: null
 
 delta:
   target: 0.20

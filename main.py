@@ -146,6 +146,7 @@ def run(args: argparse.Namespace) -> int:
             dte_min=dte_cfg["min"], dte_max=dte_cfg["max"],
             target_delta=delta_cfg["target"], delta_min=delta_cfg["min"], delta_max=delta_cfg["max"],
             quality=quality, next_earnings=next_earn,
+            dte_stretch_max=dte_cfg.get("stretch_max"),
         )
         contracts_evaluated += res.get("n_in_band", 0)
         for code, n in (res.get("gate_failures") or {}).items():
