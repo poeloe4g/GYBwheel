@@ -13,22 +13,15 @@ def test_load_config_has_corrected_fields(config):
     assert "cache_dir" in config["data"]
 
 
-def test_load_secrets_requires_no_token(monkeypatch):
-    # Option-chain data comes from yfinance (no credentials); load must not raise.
-    monkeypatch.delenv("FMP_API_KEY", raising=False)
+def test_load_secrets_requires_no_token():
+    # All data comes from yfinance (no credentials); load must not raise.
     secrets = config_mod.load_secrets(env_path="/nonexistent/.env")
-    assert secrets.fmp_api_key is None
-
-
-def test_fmp_key_loaded_from_env(monkeypatch):
-    monkeypatch.setenv("FMP_API_KEY", "fmpkey")
-    secrets = config_mod.load_secrets(env_path="/nonexistent/.env")
-    assert secrets.fmp_api_key == "fmpkey"
+    assert secrets is not None
 
 
 def test_secret_in_config_rejected(tmp_path):
     bad = tmp_path / "config.yaml"
-    bad.write_text("quality:\n  fmp_api_key: leaked\n")
+    bad.write_text("quality:\n  some_api_key: leaked\n")
     with pytest.raises(config_mod.ConfigError):
         config_mod.load_config(bad)
 

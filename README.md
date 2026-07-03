@@ -14,16 +14,16 @@ Built from [`docs/feature-plan.md`](docs/feature-plan.md) and
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-cp .env.example .env          # optional: FMP_API_KEY for sturdier fundamentals
 cp positions.example.yaml positions.yaml   # optional: your open positions
 
 python main.py --help
 python main.py --tickers AAPL,MSFT,KO -v   # screen a few names -> candidates.csv
 ```
 
-Option-chain data comes from yfinance, which needs no credentials, so no API
-key is required to run. The optional `FMP_API_KEY` lives in `.env` (gitignored);
-all thresholds live in `config.yaml`.
+Option-chain and fundamentals data come from yfinance, which needs no
+credentials, so no API key is required to run. All thresholds live in
+`config.yaml`; if a keyed data source is ever added, its secret goes in `.env`
+(gitignored — see `.env.example`), never in `config.yaml`.
 
 ## Pipeline
 
@@ -86,9 +86,9 @@ additive over v1; readers treat the new fields as optional).
 
 ### One-time repo setup
 1. **Settings → Pages → Source = "GitHub Actions".**
-2. **Settings → Secrets and variables → Actions:** optionally add `FMP_API_KEY`
-   (no secret is required — option-chain data comes from yfinance).
-3. **Settings → Actions → General → Workflow permissions = "Read and write".**
+2. **Settings → Actions → General → Workflow permissions = "Read and write".**
+
+No Actions secrets are required — all data comes from yfinance.
 
 Breadth (the heavy full-S&P yfinance loop) is intentionally **off** in CI — it's
 the most rate-limit-fragile step; the regime breadth signal degrades to N/A.

@@ -58,8 +58,6 @@ jobs:
       # No --sp500-file: the full S&P breadth loop over yfinance is the most
       # rate-limit-fragile/slow part; the breadth signal degrades gracefully.
       - name: Run screener
-        env:
-          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
         run: |
           ARGS=""
           if [ -n "${{ github.event.inputs.tickers }}" ]; then

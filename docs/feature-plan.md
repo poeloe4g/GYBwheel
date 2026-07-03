@@ -3,6 +3,8 @@
 A structured, trackable breakdown of the build into discrete features. Derived from the
 7 build slices and the B-series fixes in [`wheel-screener-plan.md`](./wheel-screener-plan.md).
 
+> **Superseded note (2026-07):** the Tradier option-chain source described in this historical document was replaced by yfinance (no `TRADIER_TOKEN` or any credential is needed); the optional FMP fundamentals key was likewise removed as it was never wired up. References to Tradier/FMP/`TRADIER_TOKEN` below are kept for historical context only.
+
 **Legend**
 - **Status:** `TODO` · `IN PROGRESS` · `BLOCKED` · `DONE`
 - **Priority:** `P0` (must-have for a usable v1) · `P1` (important) · `P2` (nice-to-have)
