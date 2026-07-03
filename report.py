@@ -13,7 +13,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+# v2 is additive over v1: top-level ``near_misses`` plus ``meta.near_miss_count``
+# and ``meta.rejections_by_reason``. Readers must treat v2 fields as optional and
+# never gate on the version number.
+SCHEMA_VERSION = 2
 
 CSV_COLUMNS = [
     "ticker", "sector", "expiration", "dte", "strike", "mid", "abs_delta",
@@ -104,6 +107,7 @@ def write_json(
     config: dict[str, Any],
     path: str | Path,
     *,
+    near_misses: list[dict[str, Any]] | None = None,
     meta_extra: dict[str, Any] | None = None,
     generated_at: datetime | None = None,
 ) -> Path:
@@ -111,14 +115,19 @@ def write_json(
 
     Reuses the already-built ``header`` (``build_header``), the ranked ``rows``
     (full dicts, not the trimmed CSV columns), and the ``Regime`` dataclass.
-    Written atomically (temp + ``os.replace``) like ``cache.DiskCache.set``.
+    ``near_misses`` are fully sized/scored rows that failed a quality gate or
+    carry data flags — same shape as ``rows`` plus ``rejection_reasons`` and
+    ``data_flags``. Written atomically (temp + ``os.replace``) like
+    ``cache.DiskCache.set``.
     """
     now = generated_at or datetime.now(timezone.utc)
     quality = config.get("quality", {})
+    near_misses = near_misses or []
     meta = {
         "generated_at": now.isoformat(timespec="seconds"),
         "run_date": now.date().isoformat(),
         "candidate_count": len(rows),
+        "near_miss_count": len(near_misses),
     }
     if meta_extra:
         meta.update(meta_extra)
@@ -141,6 +150,7 @@ def write_json(
             "avoid_earnings_before_expiry": quality.get("avoid_earnings_before_expiry"),
         },
         "rows": rows,
+        "near_misses": near_misses,
     }
 
     path = Path(path)

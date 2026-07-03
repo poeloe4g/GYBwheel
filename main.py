@@ -75,11 +75,13 @@ def run(args: argparse.Namespace) -> int:
         if args.json_out:
             report_mod.write_json(
                 header, [], regime, config, args.json_out,
+                near_misses=[],
                 meta_extra={
                     "data_source": "yfinance",
                     "tickers_screened": [],
                     "breadth_evaluated": bool(members),
                     "max_rows": args.max_rows,
+                    "rejections_by_reason": {},
                 },
             )
         return 0
@@ -93,6 +95,15 @@ def run(args: argparse.Namespace) -> int:
 
     dte_cfg, delta_cfg, quality = config["dte"], config["delta"], config["quality"]
     scored_rows = []
+    near_miss_rows = []
+    rejection_counts: dict[str, int] = {}
+
+    def _count(code: str) -> None:
+        rejection_counts[code] = rejection_counts.get(code, 0) + 1
+
+    for _ in universe_rejects:
+        _count("universe")
+
     for f in passing:
         ticker = f["ticker"]
         spot = f.get("price")
@@ -101,6 +112,7 @@ def run(args: argparse.Namespace) -> int:
             spot = hist[-1]["close"] if hist else None
         if not spot:
             log.info("skip %s: no spot price", ticker)
+            _count("no_spot")
             continue
 
         # 4. Nearest-delta put
@@ -111,6 +123,7 @@ def run(args: argparse.Namespace) -> int:
         )
         if not put:
             log.info("skip %s: no put in delta/DTE window", ticker)
+            _count("no_put_in_window")
             continue
 
         # 5. Earnings + quality filters
@@ -118,22 +131,43 @@ def run(args: argparse.Namespace) -> int:
         ok, reason = screen_mod.passes_earnings_filter(
             put["expiration"], next_earn, avoid=quality["avoid_earnings_before_expiry"]
         )
+        rejections: list[dict[str, str]] = []
+        flags: list[dict[str, str]] = []
         if not ok:
-            log.info("reject %s: %s", ticker, reason)
+            rejections.append({"code": "earnings", "message": reason or "spans earnings"})
+        elif reason:
+            flags.append({"code": "earnings_unknown", "message": reason})
+        q_rejections, q_flags = screen_mod.apply_quality_filters(put, spot, quality)
+        rejections += q_rejections
+        flags += q_flags
+
+        # Contracts without a usable premium/strike/DTE can't be sized or scored
+        # at all — count them, but they don't make meaningful near-miss rows.
+        unsizeable = {"no_premium", "missing_strike_dte"}
+        if any(e["code"] in unsizeable for e in rejections):
+            log.info("reject %s: %s", ticker, "; ".join(e["message"] for e in rejections))
+            for e in rejections:
+                _count(e["code"])
             continue
-        rejections, flags = screen_mod.apply_quality_filters(put, spot, quality)
+
+        # 6. Sizing + 7. Score — near-misses too, so they carry the full row shape.
+        candidate = {**put, "ticker": ticker, "sector": f.get("sector", "Unknown")}
+        sized = size_mod.size_candidate(candidate, account, config)
+        scored = score_mod.score_candidate(sized, config, spot)
+
         if rejections or flags:
             log.info("reject %s: %s", ticker,
                      "; ".join(e["message"] for e in rejections + flags))
-            continue
-
-        # 6. Sizing
-        candidate = {**put, "ticker": ticker, "sector": f.get("sector", "Unknown")}
-        sized = size_mod.size_candidate(candidate, account, config)
-        # 7. Score
-        scored_rows.append(score_mod.score_candidate(sized, config, spot))
+            for e in rejections or flags:
+                _count(e["code"])
+            near_miss_rows.append(
+                {**scored, "rejection_reasons": rejections, "data_flags": flags}
+            )
+        else:
+            scored_rows.append(scored)
 
     ranked = score_mod.rank(scored_rows)[: args.max_rows]
+    near_misses = score_mod.rank(near_miss_rows)[: args.max_rows]
 
     # B1 capital sanity check
     warn = size_mod.sanity_check_capital([r["strike"] for r in scored_rows], config)
@@ -148,11 +182,13 @@ def run(args: argparse.Namespace) -> int:
     if args.json_out:
         jout = report_mod.write_json(
             header, ranked, regime, config, args.json_out,
+            near_misses=near_misses,
             meta_extra={
                 "data_source": "yfinance",
                 "tickers_screened": candidates,
                 "breadth_evaluated": bool(members),
                 "max_rows": args.max_rows,
+                "rejections_by_reason": rejection_counts,
             },
         )
         print(f"Wrote run snapshot to {jout}")

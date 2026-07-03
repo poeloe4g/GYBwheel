@@ -28,6 +28,7 @@ def _summarize(snapshot: dict[str, Any]) -> dict[str, Any]:
         "date": meta.get("run_date"),
         "light": (snapshot.get("regime") or {}).get("light"),
         "row_count": len(rows),
+        "near_miss_count": len(snapshot.get("near_misses") or []),  # 0 for v1 snapshots
         "top_score": max(scores) if scores else None,
         "pct_deployed": header.get("pct_deployed"),
     }

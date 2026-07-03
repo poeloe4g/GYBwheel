@@ -20,6 +20,13 @@ class FakeProvider:
             "BAN": {"ticker": "BAN", "market_cap": 5e11, "avg_volume": 5e6,
                     "net_income": 3e10, "free_cash_flow": 2.5e10,
                     "sector": "Energy", "has_options": True, "price": 50.0},
+            # WIDE fails the spread gate; NOIV has no IV from the feed (soft flag).
+            "WIDE": {"ticker": "WIDE", "market_cap": 5e11, "avg_volume": 5e6,
+                     "net_income": 3e10, "free_cash_flow": 2.5e10,
+                     "sector": "Financials", "has_options": True, "price": 100.0},
+            "NOIV": {"ticker": "NOIV", "market_cap": 5e11, "avg_volume": 5e6,
+                     "net_income": 3e10, "free_cash_flow": 2.5e10,
+                     "sector": "Healthcare", "has_options": True, "price": 100.0},
         }
 
     def get_price_history(self, ticker, period="1y"):
@@ -39,10 +46,15 @@ class FakeProvider:
         return self._funds[ticker]
 
     def get_nearest_delta_put(self, ticker, spot, **kw):
-        return {"option_type": "put", "strike": 18.0, "bid": 0.31, "ask": 0.33,
-                "mid": 0.32, "delta": -0.20, "abs_delta": 0.20, "iv": 0.24,
-                "open_interest": 2500, "volume": 800, "expiration": "2099-07-18",
-                "dte": 35}
+        put = {"option_type": "put", "strike": 18.0, "bid": 0.31, "ask": 0.33,
+               "mid": 0.32, "delta": -0.20, "abs_delta": 0.20, "iv": 0.24,
+               "open_interest": 2500, "volume": 800, "expiration": "2099-07-18",
+               "dte": 35}
+        if ticker == "WIDE":  # $0.90-wide market on a $0.55 mid -> spread reject
+            put.update(bid=0.10, ask=1.00, mid=0.55)
+        elif ticker == "NOIV":  # feed supplies no IV -> iv_missing flag
+            put.update(iv=None)
+        return put
 
     def get_next_earnings(self, ticker):
         return "2099-12-31"  # far away — never blocks
@@ -68,10 +80,12 @@ def test_red_regime_short_circuits(tmp_path, monkeypatch, capsys):
     assert not (tmp_path / "out.csv").exists()  # stopped before writing
     # RED days still appear on the dashboard timeline, with no candidates.
     doc = json.loads(json_out.read_text())
-    assert doc["schema_version"] == 1
+    assert doc["schema_version"] == 2
     assert doc["regime"]["light"] == "RED"
     assert doc["rows"] == []
+    assert doc["near_misses"] == []
     assert doc["meta"]["candidate_count"] == 0
+    assert doc["meta"]["rejections_by_reason"] == {}
 
 
 def test_green_end_to_end_writes_csv(tmp_path, monkeypatch, capsys):
@@ -90,7 +104,7 @@ def test_green_end_to_end_writes_csv(tmp_path, monkeypatch, capsys):
 
     # JSON snapshot mirrors the run for the dashboard.
     doc = json.loads(json_out.read_text())
-    assert doc["schema_version"] == 1
+    assert doc["schema_version"] == 2
     assert doc["regime"]["light"] == "GREEN"
     assert set(doc["regime"]["signals"]) == {
         "spy_below_200dma", "breadth_below_floor", "vix_high_and_spy_falling"}
@@ -100,3 +114,32 @@ def test_green_end_to_end_writes_csv(tmp_path, monkeypatch, capsys):
                 "max_contracts", "sector"):
         assert key in row
     assert doc["header"]["total_capital"] == 50000
+
+
+def test_near_misses_captured_with_reasons(tmp_path, monkeypatch):
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c"), falling=False))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, tickers="MEGA,WIDE,NOIV", json_out=str(json_out)))
+    assert rc == 0
+
+    doc = json.loads(json_out.read_text())
+    assert [r["ticker"] for r in doc["rows"]] == ["MEGA"]
+
+    near = {r["ticker"]: r for r in doc["near_misses"]}
+    assert set(near) == {"WIDE", "NOIV"}
+    # WIDE: hard spread rejection, fully sized/scored anyway.
+    assert [e["code"] for e in near["WIDE"]["rejection_reasons"]] == ["spread"]
+    assert near["WIDE"]["data_flags"] == []
+    assert "score" in near["WIDE"] and "max_contracts" in near["WIDE"]
+    # NOIV: no hard rejection, just the missing-IV data flag.
+    assert near["NOIV"]["rejection_reasons"] == []
+    assert [e["code"] for e in near["NOIV"]["data_flags"]] == ["iv_missing"]
+
+    counts = doc["meta"]["rejections_by_reason"]
+    assert counts == {"spread": 1, "iv_missing": 1}
+    assert doc["meta"]["near_miss_count"] == 2
+    assert doc["meta"]["candidate_count"] == 1
+    # Near misses never leak into the CSV.
+    csv_text = (tmp_path / "out.csv").read_text()
+    assert "WIDE" not in csv_text and "NOIV" not in csv_text

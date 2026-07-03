@@ -52,6 +52,25 @@ def test_write_json_sanitizes_infinity(tmp_path):
     assert doc["thresholds"]["scoring_mode"] == "blended"
 
 
+def test_write_json_near_misses_roundtrip(tmp_path):
+    near = [{"ticker": "BBB", "score": 1.1,
+             "rejection_reasons": [{"code": "spread", "message": "spread 0.2 > 0.15"}],
+             "data_flags": []}]
+    out = report_mod.write_json(
+        _header(), [{"ticker": "AAA", "score": 2.0}], _Regime(), _CONFIG,
+        tmp_path / "run.json", near_misses=near,
+        meta_extra={"rejections_by_reason": {"spread": 1}},
+        generated_at=datetime(2026, 7, 3, 19, 45, tzinfo=timezone.utc),
+    )
+    doc = json.loads(out.read_text())
+    assert doc["schema_version"] == 2
+    assert doc["near_misses"][0]["ticker"] == "BBB"
+    assert doc["near_misses"][0]["rejection_reasons"][0]["code"] == "spread"
+    assert doc["meta"]["near_miss_count"] == 1
+    assert doc["meta"]["candidate_count"] == 1
+    assert doc["meta"]["rejections_by_reason"] == {"spread": 1}
+
+
 def test_build_index_summarizes_runs(tmp_path):
     runs = tmp_path / "runs"
     runs.mkdir()
@@ -77,3 +96,20 @@ def test_build_index_summarizes_runs(tmp_path):
     assert (tmp_path / "latest.json").exists()
     latest = json.loads((tmp_path / "latest.json").read_text())
     assert latest["meta"]["run_date"] == "2026-06-20"
+
+
+def test_build_index_near_miss_count_mixed_versions(tmp_path):
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    # A v1-shaped snapshot (no near_misses key) must summarize to 0.
+    v1 = {"schema_version": 1, "meta": {"run_date": "2026-06-19"},
+          "regime": {"light": "GREEN"}, "header": {}, "rows": []}
+    (runs / "2026-06-19.json").write_text(json.dumps(v1))
+    report_mod.write_json(
+        _header(), [], _Regime(), _CONFIG, runs / "2026-06-20.json",
+        near_misses=[{"ticker": "X", "score": 1.0}, {"ticker": "Y", "score": 0.5}],
+        generated_at=datetime(2026, 6, 20, 19, 45, tzinfo=timezone.utc),
+    )
+    index = index_mod.build_index(tmp_path)
+    assert index["runs"][0]["near_miss_count"] == 0
+    assert index["runs"][1]["near_miss_count"] == 2
