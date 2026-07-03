@@ -3,7 +3,7 @@
 
 account:
   total_capital: 50000
-  max_pct_per_name: 0.05      # per-name collateral cap
+  max_pct_per_name: 0.40      # per-name collateral cap
   max_pct_per_sector: 0.25    # per-sector collateral cap
   max_pct_deployed: 0.50      # total deployed cap
   # Opt-in: demote otherwise-clean candidates whose single-contract collateral
