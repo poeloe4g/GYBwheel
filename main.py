@@ -89,7 +89,7 @@ def run(args: argparse.Namespace) -> int:
         [t.strip().upper() for t in args.tickers.split(",")] if args.tickers
         else DEFAULT_CANDIDATES
     )
-    passing = universe_mod.build_universe(candidates, provider, config)
+    passing, universe_rejects = universe_mod.build_universe(candidates, provider, config)
 
     dte_cfg, delta_cfg, quality = config["dte"], config["delta"], config["quality"]
     scored_rows = []
@@ -121,9 +121,10 @@ def run(args: argparse.Namespace) -> int:
         if not ok:
             log.info("reject %s: %s", ticker, reason)
             continue
-        rejections = screen_mod.apply_quality_filters(put, spot, quality)
-        if rejections:
-            log.info("reject %s: %s", ticker, "; ".join(rejections))
+        rejections, flags = screen_mod.apply_quality_filters(put, spot, quality)
+        if rejections or flags:
+            log.info("reject %s: %s", ticker,
+                     "; ".join(e["message"] for e in rejections + flags))
             continue
 
         # 6. Sizing

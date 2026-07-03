@@ -66,11 +66,22 @@ def passes_earnings_filter(
     return True, None
 
 
+def _entry(code: str, message: str) -> dict[str, str]:
+    return {"code": code, "message": message}
+
+
 def apply_quality_filters(
     opt: dict[str, Any], spot: float, quality: dict[str, Any],
-) -> list[str]:
-    """Return a list of rejection reasons (empty list == passes all filters)."""
-    reasons: list[str] = []
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """Return ``(rejections, flags)``; ``([], [])`` == passes all filters cleanly.
+
+    Rejections are hard gate failures. Flags mark gates that could not be
+    evaluated because the feed lacked data (missing IV/quotes/OI) — the caller
+    decides how to route flagged contracts; they must never pass silently.
+    Each entry is ``{"code", "message"}``.
+    """
+    reasons: list[dict[str, str]] = []
+    flags: list[dict[str, str]] = []
     strike = opt.get("strike")
     premium = opt.get("mid")
     dte = opt.get("dte")
@@ -78,33 +89,42 @@ def apply_quality_filters(
     bid, ask = opt.get("bid"), opt.get("ask")
 
     if premium is None or premium <= 0:
-        return ["no valid premium (mid <= 0)"]
+        return [_entry("no_premium", "no valid premium (mid <= 0)")], []
     if strike is None or dte is None or dte <= 0:
-        return ["missing strike/DTE"]
+        return [_entry("missing_strike_dte", "missing strike/DTE")], []
 
     y30 = formulas.yield_30dte(premium, strike, dte)
     if y30 < quality["min_yield_30dte"]:
-        reasons.append(f"yield/30DTE {y30:.4f} < {quality['min_yield_30dte']}")
+        reasons.append(_entry("yield_30dte",
+                              f"yield/30DTE {y30:.4f} < {quality['min_yield_30dte']}"))
 
-    if iv is not None:
+    if iv is None:
+        flags.append(_entry("iv_missing", "no IV from feed — implied-move gate not evaluated"))
+    else:
         im = formulas.implied_move(iv, dte)
         if im > quality["max_implied_move"]:
-            reasons.append(f"implied move {im:.4f} > {quality['max_implied_move']}")
+            reasons.append(_entry("implied_move",
+                                  f"implied move {im:.4f} > {quality['max_implied_move']}"))
 
-    if bid is not None and ask is not None:
+    if bid is None or ask is None:
+        flags.append(_entry("spread_unknown", "no bid/ask from feed — spread gate not evaluated"))
+    else:
         sp = formulas.spread_pct(bid, ask)
         spread_abs = ask - bid
         # A tight absolute spread is acceptable even when it is a large share of
         # a small mid (e.g. a $0.05-wide market on a $0.50 premium).
         if sp > quality["max_spread_pct"] and spread_abs > quality.get("max_spread_abs", float("inf")):
-            reasons.append(f"spread {sp:.4f} > {quality['max_spread_pct']}")
+            reasons.append(_entry("spread", f"spread {sp:.4f} > {quality['max_spread_pct']}"))
 
     oi = opt.get("open_interest")
-    if oi is not None and oi < quality["min_open_interest"]:
-        reasons.append(f"OI {oi} < {quality['min_open_interest']}")
+    if oi is None:
+        flags.append(_entry("oi_unknown", "no open interest from feed — OI gate not evaluated"))
+    elif oi < quality["min_open_interest"]:
+        reasons.append(_entry("open_interest", f"OI {oi} < {quality['min_open_interest']}"))
 
     dist = formulas.distance_to_strike(spot, strike)
     if dist < quality["min_distance_to_strike"]:
-        reasons.append(f"distance {dist:.4f} < {quality['min_distance_to_strike']}")
+        reasons.append(_entry("distance",
+                              f"distance {dist:.4f} < {quality['min_distance_to_strike']}"))
 
-    return reasons
+    return reasons, flags

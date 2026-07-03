@@ -20,6 +20,20 @@ def test_normalize_yf_option_maps_fields_and_omits_greeks():
     assert opt["dte"] > 0
 
 
+def test_normalize_yf_fundamentals_has_options_tristate():
+    info = {"marketCap": 3e12, "averageVolume": 5e7, "netIncomeToCommon": 1e11,
+            "freeCashflow": 9e10, "sector": "Technology", "currentPrice": 200.0}
+    # No optionsTimestamp -> unknown, never a fabricated True/False.
+    assert data.normalize_yf_fundamentals("MEGA", info)["has_options"] is None
+    assert data.normalize_yf_fundamentals(
+        "MEGA", {**info, "optionsTimestamp": 1750000000})["has_options"] is True
+
+
+def test_normalize_yf_fundamentals_price_fallback():
+    info = {"regularMarketPrice": 101.5}
+    assert data.normalize_yf_fundamentals("X", info)["price"] == 101.5
+
+
 def test_with_backoff_retries_then_succeeds():
     calls = {"n": 0}
     slept = []

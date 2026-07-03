@@ -73,6 +73,25 @@ def normalize_yf_option(raw: dict[str, Any], expiration: str) -> dict[str, Any]:
     }
 
 
+def normalize_yf_fundamentals(ticker: str, info: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a yfinance ``info`` dict into the screener's fundamentals shape.
+
+    ``has_options`` is tri-state: True when Yahoo reports an options timestamp,
+    None (unknown) when it doesn't — yfinance's ``info`` is too flaky to assert
+    a hard False from a missing key.
+    """
+    return {
+        "ticker": ticker,
+        "market_cap": info.get("marketCap"),
+        "avg_volume": info.get("averageVolume"),
+        "net_income": info.get("netIncomeToCommon"),
+        "free_cash_flow": info.get("freeCashflow"),
+        "sector": info.get("sector"),
+        "has_options": True if info.get("optionsTimestamp") is not None else None,
+        "price": info.get("currentPrice") or info.get("regularMarketPrice"),
+    }
+
+
 def dte_for(expiration: str, today: date | None = None) -> int:
     today = today or date.today()
     exp = datetime.strptime(expiration, "%Y-%m-%d").date()
@@ -160,17 +179,7 @@ class DataProvider:
         import yfinance as yf
 
         def call() -> dict[str, Any]:
-            info = yf.Ticker(ticker).info
-            return {
-                "ticker": ticker,
-                "market_cap": info.get("marketCap"),
-                "avg_volume": info.get("averageVolume"),
-                "net_income": info.get("netIncomeToCommon"),
-                "free_cash_flow": info.get("freeCashflow"),
-                "sector": info.get("sector"),
-                "has_options": bool(info.get("optionsTimestamp") or True),
-                "price": info.get("currentPrice") or info.get("regularMarketPrice"),
-            }
+            return normalize_yf_fundamentals(ticker, yf.Ticker(ticker).info)
 
         fundamentals = with_backoff(call, max_retries=self.max_retries, is_transient=_is_rate_limited)
         self.cache.set("fundamentals", ticker, fundamentals)
