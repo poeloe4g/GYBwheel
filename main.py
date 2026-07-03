@@ -23,11 +23,14 @@ from data import DataProvider
 
 log = logging.getLogger("main")
 
-# A small default seed universe (mega-caps across sectors). Override with --tickers.
+# Fallback seed universe (mega-caps across sectors), used only when neither
+# --tickers is given nor the --tickers-file exists.
 DEFAULT_CANDIDATES = [
     "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "JPM", "V", "MA", "UNH",
     "HD", "PG", "KO", "PEP", "COST", "WMT", "XOM", "CVX", "JNJ", "ABBV",
 ]
+
+DEFAULT_TICKERS_FILE = "data/universe_sp100.txt"
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -39,7 +42,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--positions", default="positions.yaml", help="Path to positions.yaml (B3)")
     p.add_argument("--output", default="candidates.csv", help="CSV output path")
     p.add_argument("--json-out", help="Write a run snapshot JSON here (dashboard feed).")
-    p.add_argument("--tickers", help="Comma-separated tickers to screen (overrides default seed)")
+    p.add_argument("--tickers", help="Comma-separated tickers to screen (overrides --tickers-file)")
+    p.add_argument("--tickers-file", default=DEFAULT_TICKERS_FILE,
+                   help="File of tickers to screen, one per line, # comments allowed "
+                        "(missing file falls back to the built-in seed list)")
     p.add_argument("--sp500-file", help="File of S&P 500 tickers (one per line) for breadth")
     p.add_argument("--max-rows", type=int, default=25, help="Max ranked rows to display")
     p.add_argument(
@@ -87,10 +93,7 @@ def run(args: argparse.Namespace) -> int:
         return 0
 
     # 2/3. Universe --------------------------------------------------------
-    candidates = (
-        [t.strip().upper() for t in args.tickers.split(",")] if args.tickers
-        else DEFAULT_CANDIDATES
-    )
+    candidates = _resolve_candidates(args)
     passing, universe_rejects = universe_mod.build_universe(candidates, provider, config)
 
     dte_cfg, delta_cfg, quality = config["dte"], config["delta"], config["quality"]
@@ -195,8 +198,23 @@ def run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_candidates(args: argparse.Namespace) -> list[str]:
+    """--tickers (explicit) > --tickers-file (if it exists) > built-in seed."""
+    if args.tickers:
+        return [t.strip().upper() for t in args.tickers.split(",") if t.strip()]
+    tickers_file = getattr(args, "tickers_file", None)
+    if tickers_file and Path(tickers_file).exists():
+        return _load_lines(tickers_file)
+    return DEFAULT_CANDIDATES
+
+
 def _load_lines(path: str) -> list[str]:
-    return [ln.strip().upper() for ln in Path(path).read_text().splitlines() if ln.strip()]
+    lines = []
+    for ln in Path(path).read_text().splitlines():
+        ln = ln.split("#", 1)[0].strip()
+        if ln:
+            lines.append(ln.upper())
+    return lines
 
 
 def main(argv: list[str] | None = None) -> int:
