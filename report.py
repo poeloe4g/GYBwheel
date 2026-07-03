@@ -18,7 +18,10 @@ from typing import Any
 #   v2: top-level ``near_misses``, ``meta.near_miss_count``,
 #       ``meta.rejections_by_reason``.
 #   v3: candidate rows may carry ``data_flags`` (policy-promoted flags) and
-#       ``spot``; ``meta.flags_by_reason``; ``thresholds.unknown_earnings_policy``.
+#       ``spot``; ``meta.flags_by_reason``; ``thresholds.unknown_earnings_policy``;
+#       ``meta.contracts_evaluated`` + ``meta.contract_gate_failures``
+#       (per-contract gate counts across the whole delta band, while
+#       ``rejections_by_reason`` stays per-ticker for history comparability).
 SCHEMA_VERSION = 3
 
 CSV_COLUMNS = [

@@ -32,6 +32,10 @@ class FakeProvider:
             "NOEARN": {"ticker": "NOEARN", "market_cap": 5e11, "avg_volume": 5e6,
                        "net_income": 3e10, "free_cash_flow": 2.5e10,
                        "sector": "Industrials", "has_options": True, "price": 100.0},
+            # RESCUE's delta-nearest contract fails OI; an adjacent one passes.
+            "RESCUE": {"ticker": "RESCUE", "market_cap": 5e11, "avg_volume": 5e6,
+                       "net_income": 3e10, "free_cash_flow": 2.5e10,
+                       "sector": "Utilities", "has_options": True, "price": 100.0},
         }
 
     def get_price_history(self, ticker, period="1y"):
@@ -50,16 +54,35 @@ class FakeProvider:
     def get_fundamentals(self, ticker):
         return self._funds[ticker]
 
-    def get_nearest_delta_put(self, ticker, spot, **kw):
+    def _chain(self, ticker):
         put = {"option_type": "put", "strike": 18.0, "bid": 0.31, "ask": 0.33,
-               "mid": 0.32, "delta": -0.20, "abs_delta": 0.20, "iv": 0.24,
+               "mid": 0.32, "delta": -0.20, "iv": 0.24,
                "open_interest": 2500, "volume": 800, "expiration": "2099-07-18",
                "dte": 35}
         if ticker == "WIDE":  # $0.90-wide market on a $0.55 mid -> spread reject
             put.update(bid=0.10, ask=1.00, mid=0.55)
         elif ticker == "NOIV":  # feed supplies no IV -> iv_missing flag
             put.update(iv=None)
-        return put
+        elif ticker == "RESCUE":
+            # The delta-nearest strike is illiquid, but an adjacent in-band
+            # strike passes every gate — filter-then-select must rescue it.
+            return [
+                {**put, "open_interest": 5},
+                {**put, "strike": 17.0, "bid": 0.20, "ask": 0.22, "mid": 0.21,
+                 "delta": -0.16, "open_interest": 3000},
+            ]
+        return [put]
+
+    def get_put_candidate(self, ticker, spot, *, quality, next_earnings=None, **kw):
+        import screen
+        result = screen.evaluate_puts(
+            self._chain(ticker), spot,
+            target_delta=kw["target_delta"], delta_min=kw["delta_min"],
+            delta_max=kw["delta_max"], quality=quality, next_earnings=next_earnings,
+        )
+        if result["selected"] is None and result["fallback"] is None:
+            result["reason"] = "no_put_in_band"
+        return result
 
     def get_next_earnings(self, ticker):
         if ticker == "NOEARN":
@@ -150,6 +173,24 @@ def test_near_misses_captured_with_reasons(tmp_path, monkeypatch):
     # Near misses never leak into the CSV.
     csv_text = (tmp_path / "out.csv").read_text()
     assert "WIDE" not in csv_text and "NOIV" not in csv_text
+
+
+def test_filter_then_select_rescues_adjacent_strike(tmp_path, monkeypatch):
+    """A ticker whose delta-nearest contract fails a gate is not lost when an
+    adjacent in-band strike qualifies."""
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c")))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, tickers="RESCUE", json_out=str(json_out)))
+    assert rc == 0
+    doc = json.loads(json_out.read_text())
+    assert [r["ticker"] for r in doc["rows"]] == ["RESCUE"]
+    assert doc["rows"][0]["strike"] == 17.0  # the qualifying adjacent strike
+    assert doc["near_misses"] == []
+    assert doc["meta"]["rejections_by_reason"] == {}
+    # Per-contract counters expose what the whole band looked like.
+    assert doc["meta"]["contracts_evaluated"] == 2
+    assert doc["meta"]["contract_gate_failures"] == {"open_interest": 1}
 
 
 def _config_with_policy(tmp_path, policy):

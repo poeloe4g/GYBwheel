@@ -33,6 +33,7 @@ quality:
   max_spread_abs: 0.10             # spread passes anyway if (ask-bid) <= this ($), rescues low-premium mids
   min_open_interest: 50
   min_distance_to_strike: 0.03     # (spot-strike)/spot; a 0.2-delta strike at IV~15% sits only ~4% below spot
+  iv_outlier_mult: 2.5             # contract IV > mult x median in-band IV: skip implied-move gate, flag iv_outlier (null disables)
   avoid_earnings_before_expiry: true   # B2
   # When the earnings date can't be determined from any feed:
   #   flag      — otherwise-clean candidates reach the main table with a visible

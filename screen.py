@@ -3,11 +3,13 @@
 F04 — nearest-delta put selector (B5).
 F06 — earnings filter (B2).
 F07 — trade-quality filters (Spec 1.3, B5).
+``evaluate_puts`` — gate-then-select over the whole delta band.
 
 Every rejection records a human-readable reason.
 """
 from __future__ import annotations
 
+import statistics
 from datetime import date, datetime
 from typing import Any
 
@@ -46,6 +48,108 @@ def select_nearest_delta_put(
             best_dist = dist
             best = {**opt, "abs_delta": ad}
     return best
+
+
+# Contracts with these rejection codes cannot be sized or scored at all, so
+# they make the worst possible fallback pick.
+UNSIZEABLE_CODES = {"no_premium", "missing_strike_dte"}
+
+
+def evaluate_puts(
+    chain: list[dict[str, Any]], spot: float, *,
+    target_delta: float, delta_min: float, delta_max: float,
+    quality: dict[str, Any], risk_free_rate: float = 0.04,
+    next_earnings: str | None = None,
+) -> dict[str, Any]:
+    """Gate every in-band put, then pick the nearest-target-delta qualifier.
+
+    The legacy flow picked the delta-nearest contract first and gated it after,
+    so a single illiquid strike could reject a ticker whose adjacent in-band
+    strikes pass cleanly. Here every put in the delta band is gated — earnings
+    checked against each contract's *own* expiration — and the qualifying
+    contract nearest ``target_delta`` wins.
+
+    Returns::
+
+        {"selected":      qualifying contract (rejections == []; flags allowed),
+                          or None,
+         "fallback":      delta-nearest contract annotated with its rejections
+                          and flags (None only when no put is in band) — the
+                          near-miss representative when nothing qualifies,
+         "n_in_band":     puts in the delta band,
+         "n_qualifying":  puts that passed every gate,
+         "gate_failures": {code: count} across ALL in-band contracts (the
+                          calibration-grade counter; a ticker's near-miss row
+                          only surfaces the fallback's own reasons)}
+
+    IV sanity: yfinance per-contract IVs are occasionally junk (an outlier
+    inflates both the implied-move gate and the BS-fallback delta). A contract
+    whose IV exceeds ``quality.iv_outlier_mult`` × the median in-band IV keeps
+    its other gate results but swaps an ``implied_move`` rejection for an
+    ``iv_outlier`` flag, and loses fallback priority to sane-IV alternatives.
+    """
+    in_band: list[dict[str, Any]] = []
+    for opt in chain:
+        if opt.get("option_type") != "put":
+            continue
+        ad = _effective_abs_delta(opt, spot, risk_free_rate)
+        if ad is None or not (delta_min <= ad <= delta_max):
+            continue
+        in_band.append({**opt, "abs_delta": ad})
+
+    if not in_band:
+        return {"selected": None, "fallback": None,
+                "n_in_band": 0, "n_qualifying": 0, "gate_failures": {}}
+
+    mult = quality.get("iv_outlier_mult")
+    ivs = [o["iv"] for o in in_band if o.get("iv")]
+    median_iv = statistics.median(ivs) if ivs else None
+
+    avoid = quality.get("avoid_earnings_before_expiry", True)
+    gate_failures: dict[str, int] = {}
+    evaluated: list[dict[str, Any]] = []
+    outlier_flags: list[bool] = []
+    for opt in in_band:
+        rejections, flags = apply_quality_filters(opt, spot, quality)
+
+        iv = opt.get("iv")
+        is_outlier = bool(mult and median_iv and iv and iv > float(mult) * median_iv)
+        if is_outlier:
+            rejections = [e for e in rejections if e["code"] != "implied_move"]
+            flags.append(_entry(
+                "iv_outlier",
+                f"IV {iv:.2f} > {mult}x median in-band IV {median_iv:.2f} — "
+                "implied-move gate not evaluated"))
+
+        ok, reason = passes_earnings_filter(opt["expiration"], next_earnings, avoid=avoid)
+        if not ok:
+            rejections.append(_entry("earnings", reason or "spans earnings"))
+        elif reason:
+            flags.append(_entry("earnings_unknown", reason))
+
+        for e in rejections:
+            gate_failures[e["code"]] = gate_failures.get(e["code"], 0) + 1
+        evaluated.append({**opt, "rejections": rejections, "flags": flags})
+        outlier_flags.append(is_outlier)
+
+    def delta_dist(o: dict[str, Any]) -> float:
+        return abs(o["abs_delta"] - target_delta)
+
+    qualifying = [o for o in evaluated if not o["rejections"]]
+    selected = min(qualifying, key=delta_dist) if qualifying else None
+
+    # Fallback = what the legacy selector would have shown as the near miss:
+    # delta-nearest, except unsizeable and IV-outlier contracts lose priority.
+    def fallback_key(i_o: tuple[int, dict[str, Any]]) -> tuple:
+        i, o = i_o
+        unsizeable = any(e["code"] in UNSIZEABLE_CODES for e in o["rejections"])
+        return (unsizeable, outlier_flags[i], delta_dist(o))
+
+    fallback = min(enumerate(evaluated), key=fallback_key)[1]
+
+    return {"selected": selected, "fallback": fallback,
+            "n_in_band": len(evaluated), "n_qualifying": len(qualifying),
+            "gate_failures": gate_failures}
 
 
 def passes_earnings_filter(

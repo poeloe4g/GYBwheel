@@ -207,21 +207,37 @@ class DataProvider:
         self.cache.set("chain", key, chain)
         return chain
 
-    def get_nearest_delta_put(
+    def get_put_candidate(
         self, ticker: str, spot: float, *, dte_min: int, dte_max: int,
         target_delta: float, delta_min: float, delta_max: float,
-    ) -> dict[str, Any] | None:
-        """Fetch candidate expiries and delegate selection to screen.select_put."""
-        from screen import select_nearest_delta_put
+        quality: dict[str, Any], next_earnings: str | None = None,
+    ) -> dict[str, Any]:
+        """Fetch in-window expiries and gate-then-select via ``screen.evaluate_puts``.
+
+        The two empty cases are distinguished with a ``reason`` so the pipeline
+        can count them separately: ``no_expiry_in_window`` (nothing listed in
+        the DTE window at all) vs ``no_put_in_band`` (chains fetched but no put
+        lands in the delta band).
+        """
+        from screen import evaluate_puts
 
         expirations = [e for e in self.get_expirations(ticker) if dte_min <= dte_for(e) <= dte_max]
+        if not expirations:
+            return {"selected": None, "fallback": None, "n_in_band": 0,
+                    "n_qualifying": 0, "gate_failures": {},
+                    "reason": "no_expiry_in_window"}
         chains = [self.get_option_chain(ticker, e) for e in expirations]
         flat = [opt for chain in chains for opt in chain]
-        return select_nearest_delta_put(
+        result = evaluate_puts(
             flat, spot,
             target_delta=target_delta, delta_min=delta_min, delta_max=delta_max,
+            quality=quality,
             risk_free_rate=self.config.get("quality", {}).get("risk_free_rate", 0.04),
+            next_earnings=next_earnings,
         )
+        if result["selected"] is None and result["fallback"] is None:
+            result["reason"] = "no_put_in_band"
+        return result
 
     # --- yfinance (fundamentals / prices / earnings / breadth / VIX) -------
     def get_fundamentals(self, ticker: str) -> dict[str, Any]:

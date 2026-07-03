@@ -15,7 +15,6 @@ from pathlib import Path
 import regime as regime_mod
 import report as report_mod
 import score as score_mod
-import screen as screen_mod
 import size as size_mod
 import universe as universe_mod
 from config import ConfigError, load_config, load_secrets
@@ -89,6 +88,8 @@ def run(args: argparse.Namespace) -> int:
                     "max_rows": args.max_rows,
                     "rejections_by_reason": {},
                     "flags_by_reason": {},
+                    "contracts_evaluated": 0,
+                    "contract_gate_failures": {},
                 },
             )
         return 0
@@ -103,6 +104,8 @@ def run(args: argparse.Namespace) -> int:
     near_miss_rows = []
     rejection_counts: dict[str, int] = {}
     flag_counts: dict[str, int] = {}
+    contracts_evaluated = 0
+    contract_gate_failures: dict[str, int] = {}
 
     def _count(code: str) -> None:
         rejection_counts[code] = rejection_counts.get(code, 0) + 1
@@ -124,31 +127,30 @@ def run(args: argparse.Namespace) -> int:
             _count("no_spot")
             continue
 
-        # 4. Nearest-delta put
-        put = provider.get_nearest_delta_put(
+        # 4+5. Gate every in-band contract, then select (filter-then-select):
+        # earnings and quality gates run per contract inside evaluate_puts, so
+        # one illiquid strike no longer rejects a ticker whose adjacent in-band
+        # strikes pass.
+        next_earn = provider.get_next_earnings(ticker)
+        res = provider.get_put_candidate(
             ticker, spot,
             dte_min=dte_cfg["min"], dte_max=dte_cfg["max"],
             target_delta=delta_cfg["target"], delta_min=delta_cfg["min"], delta_max=delta_cfg["max"],
+            quality=quality, next_earnings=next_earn,
         )
-        if not put:
-            log.info("skip %s: no put in delta/DTE window", ticker)
-            _count("no_put_in_window")
-            continue
+        contracts_evaluated += res.get("n_in_band", 0)
+        for code, n in (res.get("gate_failures") or {}).items():
+            contract_gate_failures[code] = contract_gate_failures.get(code, 0) + n
 
-        # 5. Earnings + quality filters
-        next_earn = provider.get_next_earnings(ticker)
-        ok, reason = screen_mod.passes_earnings_filter(
-            put["expiration"], next_earn, avoid=quality["avoid_earnings_before_expiry"]
-        )
-        rejections: list[dict[str, str]] = []
-        flags: list[dict[str, str]] = []
-        if not ok:
-            rejections.append({"code": "earnings", "message": reason or "spans earnings"})
-        elif reason:
-            flags.append({"code": "earnings_unknown", "message": reason})
-        q_rejections, q_flags = screen_mod.apply_quality_filters(put, spot, quality)
-        rejections += q_rejections
-        flags += q_flags
+        put = res.get("selected") or res.get("fallback")
+        if not put:
+            reason_code = res.get("reason", "no_put_in_band")
+            log.info("skip %s: %s", ticker, reason_code)
+            _count(reason_code)
+            continue
+        rejections = list(put.get("rejections") or [])
+        flags = list(put.get("flags") or [])
+        put = {k: v for k, v in put.items() if k not in ("rejections", "flags")}
 
         if earnings_policy == "reject":
             for e in [f for f in flags if f["code"] == "earnings_unknown"]:
@@ -218,6 +220,8 @@ def run(args: argparse.Namespace) -> int:
                 "max_rows": args.max_rows,
                 "rejections_by_reason": rejection_counts,
                 "flags_by_reason": flag_counts,
+                "contracts_evaluated": contracts_evaluated,
+                "contract_gate_failures": contract_gate_failures,
             },
         )
         print(f"Wrote run snapshot to {jout}")
