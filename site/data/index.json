@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-03T13:05:17+00:00",
+  "updated_at": "2026-07-03T13:33:28+00:00",
   "latest": "2026-07-03",
   "runs": [
     {
@@ -75,12 +75,12 @@
     {
       "date": "2026-07-03",
       "light": "GREEN",
-      "row_count": 8,
+      "row_count": 1,
       "near_miss_count": 25,
-      "top_score": 0.1540691085157983,
+      "top_score": 0.13317485838136345,
       "pct_deployed": 0.0,
       "demo": false,
-      "quotes_trusted": false
+      "quotes_trusted": true
     }
   ]
 }
