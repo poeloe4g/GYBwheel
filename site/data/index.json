@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-03T11:11:00+00:00",
+  "updated_at": "2026-07-03T13:05:17+00:00",
   "latest": "2026-07-03",
   "runs": [
     {
@@ -9,7 +9,8 @@
       "near_miss_count": 0,
       "top_score": null,
       "pct_deployed": 0.0,
-      "demo": false
+      "demo": false,
+      "quotes_trusted": null
     },
     {
       "date": "2026-06-25",
@@ -18,7 +19,8 @@
       "near_miss_count": 0,
       "top_score": null,
       "pct_deployed": 0.0,
-      "demo": false
+      "demo": false,
+      "quotes_trusted": null
     },
     {
       "date": "2026-06-26",
@@ -27,7 +29,8 @@
       "near_miss_count": 0,
       "top_score": null,
       "pct_deployed": 0.0,
-      "demo": false
+      "demo": false,
+      "quotes_trusted": null
     },
     {
       "date": "2026-06-29",
@@ -36,7 +39,8 @@
       "near_miss_count": 0,
       "top_score": null,
       "pct_deployed": 0.0,
-      "demo": false
+      "demo": false,
+      "quotes_trusted": null
     },
     {
       "date": "2026-06-30",
@@ -45,7 +49,8 @@
       "near_miss_count": 0,
       "top_score": null,
       "pct_deployed": 0.0,
-      "demo": false
+      "demo": false,
+      "quotes_trusted": null
     },
     {
       "date": "2026-07-01",
@@ -54,7 +59,8 @@
       "near_miss_count": 0,
       "top_score": null,
       "pct_deployed": 0.0,
-      "demo": false
+      "demo": false,
+      "quotes_trusted": null
     },
     {
       "date": "2026-07-02",
@@ -63,16 +69,18 @@
       "near_miss_count": 0,
       "top_score": null,
       "pct_deployed": 0.0,
-      "demo": false
+      "demo": false,
+      "quotes_trusted": null
     },
     {
       "date": "2026-07-03",
       "light": "GREEN",
-      "row_count": 0,
+      "row_count": 8,
       "near_miss_count": 25,
-      "top_score": null,
+      "top_score": 0.1540691085157983,
       "pct_deployed": 0.0,
-      "demo": false
+      "demo": false,
+      "quotes_trusted": false
     }
   ]
 }

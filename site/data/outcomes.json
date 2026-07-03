@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-07-03T13:05:17+00:00",
+  "outcomes": {},
+  "summary": {
+    "candidates": {
+      "n": 0,
+      "wins": 0,
+      "win_rate": null,
+      "avg_realized_roc": null
+    },
+    "near_misses": {
+      "n": 0,
+      "wins": 0,
+      "win_rate": null,
+      "avg_realized_roc": null
+    },
+    "by_rejection_code": {},
+    "by_flag_code": {}
+  }
+}
