@@ -43,13 +43,16 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # v2: entries written before the quote-quality normalization (schema v3
+      # code) lack quote_quality/last_price and carry mids computed from
+      # zeroed off-hours bids; the version bump orphans them.
       - name: Restore screener cache
         uses: actions/cache@v4
         with:
           path: .cache
-          key: screener-cache-${{ github.run_id }}
+          key: screener-cache-v2-${{ github.run_id }}
           restore-keys: |
-            screener-cache-
+            screener-cache-v2-
 
       - name: Compute run date
         run: echo "RUN_DATE=$(date -u +%F)" >> "$GITHUB_ENV"
