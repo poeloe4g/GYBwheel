@@ -82,5 +82,11 @@ tbody td { padding: 0.5rem 0.7rem; border-top: 1px solid var(--border); white-sp
 tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
 tbody tr:hover { background: var(--panel-2); }
 .badge-breach { background: var(--red); color: #fff; border-radius: 4px; padding: 0.05rem 0.4rem; font-size: 0.7rem; font-weight: 600; }
+.badge-reject { background: rgba(215,48,39,0.25); color: #ffb3ad; border: 1px solid var(--red); border-radius: 4px; padding: 0.05rem 0.4rem; font-size: 0.7rem; font-weight: 600; margin-right: 0.25rem; cursor: help; }
+.badge-flag { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0.05rem 0.4rem; font-size: 0.7rem; font-weight: 600; margin-right: 0.25rem; cursor: help; }
+
+/* Data-freshness badges next to the generated-at timestamp */
+.badge-stale { background: var(--red); color: #fff; border-radius: 4px; padding: 0.05rem 0.4rem; font-size: 0.7rem; font-weight: 700; margin-left: 0.4rem; }
+.badge-not-today { background: rgba(224,168,0,0.2); color: var(--yellow); border: 1px solid var(--yellow); border-radius: 4px; padding: 0.05rem 0.4rem; font-size: 0.7rem; font-weight: 600; margin-left: 0.4rem; }
 
 .site-footer { padding: 1rem 1.5rem 2rem; max-width: 1200px; margin: 0 auto; }

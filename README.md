@@ -61,19 +61,28 @@ all thresholds live in `config.yaml`.
 
 ## Dashboard (GitHub Actions → GitHub Pages)
 
-The screener can run unattended in CI and publish its results — recommendations,
+**Live at <https://poeloe4g.github.io/GYBwheel/>.**
+
+The screener runs unattended in CI and publishes its results — recommendations,
 analysis, and graphs — to a static webpage.
 
-- **Compute:** `.github/workflows/screen.yml` runs the screener on a weekday-evening
-  cron (and on-demand via *Run workflow*), then commits a dated JSON snapshot.
+- **Compute:** `.github/workflows/screen.yml` runs the screener on a weekday
+  market-hours cron (and on-demand via *Run workflow*), then commits a dated
+  JSON snapshot.
 - **View:** a no-build static site in `site/` (Chart.js via CDN) reads the JSON and
-  renders the regime banner, capital summary, a ranked candidates table, per-run
-  charts (top scores, yield-vs-distance, sector allocation, deployment gauge), and
-  history trends (regime, score, candidate count, % deployed over time).
+  renders the regime banner, capital summary, a ranked candidates table, a
+  near-miss table (sized/scored rows that failed a gate, with reason badges),
+  per-run charts (top scores, yield-vs-distance, sector allocation, deployment
+  gauge, rejections by reason), and history trends (regime, score, candidate +
+  near-miss counts, % deployed over time). A freshness badge appears when the
+  latest run is over a day (yellow) or four days (red STALE) old.
 
-`main.py --json-out PATH` writes one self-contained run snapshot (regime, header,
-thresholds, full candidate rows). `scripts/build_index.py` rebuilds
-`site/data/index.json` + `latest.json` from `site/data/runs/*.json`.
+`main.py --json-out PATH` writes one self-contained run snapshot (schema v2:
+regime, header, thresholds, full candidate rows, plus `near_misses` rows with
+`rejection_reasons`/`data_flags` and `meta.rejections_by_reason` counts — v2 is
+additive over v1; readers treat the new fields as optional).
+`scripts/build_index.py` rebuilds `site/data/index.json` + `latest.json` from
+`site/data/runs/*.json`.
 
 ### One-time repo setup
 1. **Settings → Pages → Source = "GitHub Actions".**

@@ -113,3 +113,17 @@ def test_build_index_near_miss_count_mixed_versions(tmp_path):
     index = index_mod.build_index(tmp_path)
     assert index["runs"][0]["near_miss_count"] == 0
     assert index["runs"][1]["near_miss_count"] == 2
+    # Non-demo snapshots summarize demo=False so the site can filter seed data.
+    assert [r["demo"] for r in index["runs"]] == [False, False]
+
+
+def test_build_index_marks_demo_runs(tmp_path):
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    report_mod.write_json(
+        _header(), [], _Regime(), _CONFIG, runs / "2026-06-19.json",
+        meta_extra={"demo": True},
+        generated_at=datetime(2026, 6, 19, 19, 45, tzinfo=timezone.utc),
+    )
+    index = index_mod.build_index(tmp_path)
+    assert index["runs"][0]["demo"] is True

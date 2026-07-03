@@ -85,6 +85,18 @@ _RUNS = [
 ]
 
 
+# Demo near-misses for the newest run so the near-miss table/chart render locally.
+_NEAR_MISSES = [
+    {**_row("META", "Communication Services", 640, 6.80, 0.19, 0.06, 1.60, 1),
+     "rejection_reasons": [{"code": "implied_move", "message": "implied move 0.1580 > 0.15"}],
+     "data_flags": []},
+    {**_row("UNH", "Healthcare", 480, 4.90, 0.17, 0.08, 1.40, 1),
+     "rejection_reasons": [],
+     "data_flags": [{"code": "iv_missing", "message": "no IV from feed — implied-move gate not evaluated"}]},
+]
+_REJECTION_COUNTS = {"implied_move": 1, "iv_missing": 1, "universe": 2, "no_put_in_window": 1}
+
+
 def main() -> int:
     data_dir = ROOT / "site" / "data"
     runs_dir = data_dir / "runs"
@@ -101,12 +113,15 @@ def main() -> int:
             "remaining_cash": total - deployed,
             "positions_source": "greenfield (no positions.yaml)",
         }
+        newest = days_ago == 0
         report_mod.write_json(
             header, rows, _Regime(light, signals), _CONFIG,
             runs_dir / f"{ts.date().isoformat()}.json",
+            near_misses=_NEAR_MISSES if newest else [],
             meta_extra={"demo": True, "data_source": "yfinance",
                         "tickers_screened": [r["ticker"] for r in rows],
-                        "breadth_evaluated": False, "max_rows": 25},
+                        "breadth_evaluated": False, "max_rows": 25,
+                        "rejections_by_reason": _REJECTION_COUNTS if newest else {}},
             generated_at=ts,
         )
 
