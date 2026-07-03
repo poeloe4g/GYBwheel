@@ -18,10 +18,14 @@ from pathlib import Path
 
 
 def zero_candidate_streak(index: dict) -> int:
-    """Consecutive most-recent non-RED, non-demo runs with zero candidates."""
+    """Consecutive most-recent non-RED, non-demo runs with zero candidates.
+
+    Off-hours runs (``quotes_trusted`` explicitly False) are skipped too:
+    zero candidates on stale/zeroed quotes is expected, not alert-worthy.
+    """
     streak = 0
     for run in reversed(index.get("runs") or []):
-        if run.get("light") == "RED" or run.get("demo"):
+        if run.get("light") == "RED" or run.get("demo") or run.get("quotes_trusted") is False:
             continue
         if (run.get("row_count") or 0) > 0:
             break

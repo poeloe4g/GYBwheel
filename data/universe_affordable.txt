@@ -1,0 +1,41 @@
+# Opt-in screening universe for smaller accounts:
+#   python main.py --tickers-file data/universe_affordable.txt
+#
+# Curated quality large caps whose share prices have historically been low
+# enough that one CSP contract (strike x 100) can fit a modest per-name cap.
+# The fundamental gates (market cap, volume, profitability, FCF) still apply
+# on every run. Prices drift — verify strike x 100 against your own
+# account.max_pct_per_name x total_capital before trading anything.
+
+# Communications / media
+T
+VZ
+CMCSA
+
+# Financials
+BAC
+WFC
+USB
+C
+SCHW
+
+# Energy / midstream
+KMI
+WMB
+
+# Healthcare / pharma
+PFE
+BMY
+GILD
+KVUE
+
+# Consumer
+KO
+MO
+GM
+F
+
+# Technology / industrials
+INTC
+CSCO
+DOW

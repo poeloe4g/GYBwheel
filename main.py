@@ -10,12 +10,12 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import regime as regime_mod
 import report as report_mod
 import score as score_mod
-import screen as screen_mod
 import size as size_mod
 import universe as universe_mod
 from config import ConfigError, load_config, load_secrets
@@ -64,6 +64,10 @@ def run(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     secrets = load_secrets()
     provider = DataProvider(config, secrets)
+    session = _market_session()
+    if session != "regular":
+        log.warning("run is outside regular US market hours — option quotes may be "
+                    "stale or zeroed; snapshot will be stamped quotes_trusted=false")
 
     # 1. Regime check ------------------------------------------------------
     spy_hist = [h["close"] for h in provider.get_price_history("SPY", period="1y")]
@@ -88,6 +92,11 @@ def run(args: argparse.Namespace) -> int:
                     "breadth_evaluated": bool(members),
                     "max_rows": args.max_rows,
                     "rejections_by_reason": {},
+                    "flags_by_reason": {},
+                    "contracts_evaluated": 0,
+                    "contract_gate_failures": {},
+                    "market_session": session,
+                    "quotes_trusted": session == "regular",
                 },
             )
         return 0
@@ -97,12 +106,21 @@ def run(args: argparse.Namespace) -> int:
     passing, universe_rejects = universe_mod.build_universe(candidates, provider, config)
 
     dte_cfg, delta_cfg, quality = config["dte"], config["delta"], config["quality"]
+    earnings_policy = _resolve_earnings_policy(quality)
+    require_affordable = bool(config["account"].get("require_affordable", False))
+    prefer_affordable = bool(config.get("scoring", {}).get("prefer_affordable", False))
     scored_rows = []
     near_miss_rows = []
     rejection_counts: dict[str, int] = {}
+    flag_counts: dict[str, int] = {}
+    contracts_evaluated = 0
+    contract_gate_failures: dict[str, int] = {}
 
     def _count(code: str) -> None:
         rejection_counts[code] = rejection_counts.get(code, 0) + 1
+
+    def _count_flag(code: str) -> None:
+        flag_counts[code] = flag_counts.get(code, 0) + 1
 
     for _ in universe_rejects:
         _count("universe")
@@ -118,31 +136,36 @@ def run(args: argparse.Namespace) -> int:
             _count("no_spot")
             continue
 
-        # 4. Nearest-delta put
-        put = provider.get_nearest_delta_put(
+        # 4+5. Gate every in-band contract, then select (filter-then-select):
+        # earnings and quality gates run per contract inside evaluate_puts, so
+        # one illiquid strike no longer rejects a ticker whose adjacent in-band
+        # strikes pass.
+        next_earn = provider.get_next_earnings(ticker)
+        res = provider.get_put_candidate(
             ticker, spot,
             dte_min=dte_cfg["min"], dte_max=dte_cfg["max"],
             target_delta=delta_cfg["target"], delta_min=delta_cfg["min"], delta_max=delta_cfg["max"],
+            quality=quality, next_earnings=next_earn,
+            dte_stretch_max=dte_cfg.get("stretch_max"),
         )
-        if not put:
-            log.info("skip %s: no put in delta/DTE window", ticker)
-            _count("no_put_in_window")
-            continue
+        contracts_evaluated += res.get("n_in_band", 0)
+        for code, n in (res.get("gate_failures") or {}).items():
+            contract_gate_failures[code] = contract_gate_failures.get(code, 0) + n
 
-        # 5. Earnings + quality filters
-        next_earn = provider.get_next_earnings(ticker)
-        ok, reason = screen_mod.passes_earnings_filter(
-            put["expiration"], next_earn, avoid=quality["avoid_earnings_before_expiry"]
-        )
-        rejections: list[dict[str, str]] = []
-        flags: list[dict[str, str]] = []
-        if not ok:
-            rejections.append({"code": "earnings", "message": reason or "spans earnings"})
-        elif reason:
-            flags.append({"code": "earnings_unknown", "message": reason})
-        q_rejections, q_flags = screen_mod.apply_quality_filters(put, spot, quality)
-        rejections += q_rejections
-        flags += q_flags
+        put = res.get("selected") or res.get("fallback")
+        if not put:
+            reason_code = res.get("reason", "no_put_in_band")
+            log.info("skip %s: %s", ticker, reason_code)
+            _count(reason_code)
+            continue
+        rejections = list(put.get("rejections") or [])
+        flags = list(put.get("flags") or [])
+        put = {k: v for k, v in put.items() if k not in ("rejections", "flags")}
+
+        if earnings_policy == "reject":
+            for e in [f for f in flags if f["code"] == "earnings_unknown"]:
+                flags.remove(e)
+                rejections.append(e)
 
         # Contracts without a usable premium/strike/DTE can't be sized or scored
         # at all — count them, but they don't make meaningful near-miss rows.
@@ -154,11 +177,29 @@ def run(args: argparse.Namespace) -> int:
             continue
 
         # 6. Sizing + 7. Score — near-misses too, so they carry the full row shape.
-        candidate = {**put, "ticker": ticker, "sector": f.get("sector", "Unknown")}
+        candidate = {**put, "ticker": ticker, "sector": f.get("sector", "Unknown"),
+                     "spot": spot}
         sized = size_mod.size_candidate(candidate, account, config)
         scored = score_mod.score_candidate(sized, config, spot)
 
-        if rejections or flags:
+        if require_affordable and not sized["affordable"]:
+            rejections.append({
+                "code": "unaffordable",
+                "message": (f"collateral ${sized['collateral_per_contract']:,.0f} exceeds "
+                            f"available headroom (min account "
+                            f"${sized['min_account_for_1_contract']:,.0f})"),
+            })
+
+        # Flags-only rows whose every flag is the earnings one are promotable
+        # under policy=flag; all other flags (iv_missing, spread_unknown,
+        # oi_unknown) keep the near-miss route — they never pass silently.
+        promotable = (
+            earnings_policy == "flag"
+            and not rejections
+            and flags
+            and all(e["code"] == "earnings_unknown" for e in flags)
+        )
+        if rejections or (flags and not promotable):
             log.info("reject %s: %s", ticker,
                      "; ".join(e["message"] for e in rejections + flags))
             for e in rejections or flags:
@@ -167,13 +208,19 @@ def run(args: argparse.Namespace) -> int:
                 {**scored, "rejection_reasons": rejections, "data_flags": flags}
             )
         else:
-            scored_rows.append(scored)
+            if flags:
+                log.info("flag %s: %s", ticker, "; ".join(e["message"] for e in flags))
+                for e in flags:
+                    _count_flag(e["code"])
+            scored_rows.append({**scored, "data_flags": flags})
 
-    ranked = score_mod.rank(scored_rows)[: args.max_rows]
+    ranked = score_mod.rank(scored_rows, prefer_affordable=prefer_affordable)[: args.max_rows]
     near_misses = score_mod.rank(near_miss_rows)[: args.max_rows]
 
-    # B1 capital sanity check
-    warn = size_mod.sanity_check_capital([r["strike"] for r in scored_rows], config)
+    # B1 capital sanity check — over every sized row (candidates AND near
+    # misses): the warning matters most when everything breaches the cap.
+    warn = size_mod.sanity_check_capital(
+        [r["strike"] for r in scored_rows + near_miss_rows], config)
     if warn:
         log.warning(warn)
 
@@ -192,10 +239,43 @@ def run(args: argparse.Namespace) -> int:
                 "breadth_evaluated": bool(members),
                 "max_rows": args.max_rows,
                 "rejections_by_reason": rejection_counts,
+                "flags_by_reason": flag_counts,
+                "contracts_evaluated": contracts_evaluated,
+                "contract_gate_failures": contract_gate_failures,
+                "market_session": session,
+                "quotes_trusted": session == "regular",
+                "capital_warning": warn,
             },
         )
         print(f"Wrote run snapshot to {jout}")
     return 0
+
+
+def _market_session(now: datetime | None = None) -> str:
+    """Approximate US equity session from UTC alone (stdlib, no tz database).
+
+    Weekdays 13:30–20:00 UTC covers regular hours in both EDT and EST with ~1h
+    drift at the edges — the same caveat as the UTC-only CI cron. Holidays are
+    not modeled; a holiday run is merely stamped "regular" with stale quotes,
+    which the freshness badge already covers.
+    """
+    now = now or datetime.now(timezone.utc)
+    if now.weekday() >= 5:
+        return "closed"
+    minutes = now.hour * 60 + now.minute
+    return "regular" if 13 * 60 + 30 <= minutes < 20 * 60 else "closed"
+
+
+_EARNINGS_POLICIES = ("flag", "near_miss", "reject")
+
+
+def _resolve_earnings_policy(quality: dict) -> str:
+    policy = str(quality.get("unknown_earnings_policy", "near_miss")).lower()
+    if policy not in _EARNINGS_POLICIES:
+        log.warning("unknown_earnings_policy %r is not one of %s; falling back to near_miss",
+                    policy, "|".join(_EARNINGS_POLICIES))
+        return "near_miss"
+    return policy
 
 
 def _resolve_candidates(args: argparse.Namespace) -> list[str]:

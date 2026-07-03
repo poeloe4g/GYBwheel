@@ -6,6 +6,10 @@ account:
   max_pct_per_name: 0.05      # per-name collateral cap
   max_pct_per_sector: 0.25    # per-sector collateral cap
   max_pct_deployed: 0.50      # total deployed cap
+  # Opt-in: demote otherwise-clean candidates whose single-contract collateral
+  # exceeds the remaining cap headroom (rejection code: unaffordable). Off by
+  # default — unaffordable rows stay visible with affordable=false / BREACH.
+  require_affordable: false
 
 universe:
   min_market_cap: 20000000000   # $20B
@@ -20,6 +24,10 @@ dte:
   target: 35
   min: 30
   max: 45
+  # Opt-in (e.g. 56): when NO expiration lands in [min, max] — monthlies-only
+  # names — consider (max, stretch_max] instead; such contracts carry a
+  # dte_stretched flag and route to near-miss, never silently in-window.
+  stretch_max: null
 
 delta:
   target: 0.20
@@ -33,12 +41,20 @@ quality:
   max_spread_abs: 0.10             # spread passes anyway if (ask-bid) <= this ($), rescues low-premium mids
   min_open_interest: 50
   min_distance_to_strike: 0.03     # (spot-strike)/spot; a 0.2-delta strike at IV~15% sits only ~4% below spot
+  iv_outlier_mult: 2.5             # contract IV > mult x median in-band IV: skip implied-move gate, flag iv_outlier (null disables)
   avoid_earnings_before_expiry: true   # B2
+  # When the earnings date can't be determined from any feed:
+  #   flag      — otherwise-clean candidates reach the main table with a visible
+  #               earnings_unknown flag (verify the date manually before trading)
+  #   near_miss — demote to the near-miss table (strict; previous behavior)
+  #   reject    — treat as a hard gate failure
+  unknown_earnings_policy: flag
   risk_free_rate: 0.04                 # B9
   score_denominator_floor: 0.01        # B4 guard
 
 scoring:
   mode: blended                    # blended | annualized_yield_only  (B4)
+  prefer_affordable: true          # rank tradeable (affordable) candidates first
 
 regime:
   breadth_floor: 0.40              # % of S&P 500 above 50-DMA

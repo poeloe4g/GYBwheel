@@ -30,3 +30,13 @@ def test_annualized_only_mode(config):
 def test_rank_orders_descending():
     rows = [{"score": 1.0}, {"score": 3.0}, {"score": 2.0}]
     assert [r["score"] for r in score.rank(rows)] == [3.0, 2.0, 1.0]
+
+
+def test_rank_prefer_affordable_boosts_tradeable_rows():
+    rows = [{"score": 3.0, "affordable": False},
+            {"score": 1.0, "affordable": True},
+            {"score": 2.0, "affordable": True}]
+    ranked = score.rank(rows, prefer_affordable=True)
+    assert [r["score"] for r in ranked] == [2.0, 1.0, 3.0]
+    # Default ranking is untouched (near-miss ordering relies on it).
+    assert [r["score"] for r in score.rank(rows)] == [3.0, 2.0, 1.0]

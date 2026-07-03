@@ -14,6 +14,9 @@ const $ = (sel) => document.querySelector(sel);
 const fmtPct = (x) => (x == null ? "—" : (x * 100).toFixed(1) + "%");
 const fmtUsd = (x) => (x == null ? "—" : "$" + Math.round(x).toLocaleString());
 const fmtNum = (x, d = 2) => (x == null ? "—" : Number(x).toFixed(d));
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+const badge = (cls) => (e) =>
+  `<span class="${cls}" title="${esc(e.message || "")}">${esc(e.code || "?")}</span>`;
 
 // If the Chart.js CDN failed, degrade to tables/cards instead of a blank page.
 const HAS_CHART = typeof Chart !== "undefined";
@@ -61,12 +64,16 @@ function renderRegime(doc) {
       el.insertAdjacentHTML("beforeend", `<span class="badge-not-today">not today</span>`);
     }
   }
+  if (doc.meta && doc.meta.quotes_trusted === false) {
+    el.insertAdjacentHTML("beforeend", `<span class="badge-stale" title="This run executed outside regular US market hours — option bid/asks may be stale or zeroed, so gate results are unreliable.">OFF-HOURS DATA</span>`);
+  }
 }
 
 function renderCards(doc) {
   const h = doc.header || {};
+  const rows = doc.rows || [];
   const nearMissCount = (doc.near_misses || []).length;
-  const candidates = String((doc.rows || []).length) +
+  const candidates = String(rows.length) +
     (nearMissCount ? ` (+${nearMissCount} near miss${nearMissCount > 1 ? "es" : ""})` : "");
   const cards = [
     ["Total capital", fmtUsd(h.total_capital)],
@@ -75,9 +82,19 @@ function renderCards(doc) {
     ["Candidates", candidates],
     ["Positions", h.positions_source || "—"],
   ];
+  // Only v3+ rows carry `affordable`; skip the card for older snapshots.
+  if (rows.some((r) => r.affordable != null)) {
+    const n = rows.filter((r) => r.affordable).length;
+    cards.splice(4, 0, ["Tradeable", rows.length
+      ? `${n} of ${rows.length} fit the per-name cap` : "—"]);
+  }
   $("#capital-cards").innerHTML = cards
     .map(([l, v]) => `<div class="card"><div class="label">${l}</div><div class="value">${v}</div></div>`)
     .join("");
+  const warnEl = $("#capital-warning");
+  const warn = doc.meta && doc.meta.capital_warning;
+  warnEl.textContent = warn ? `⚠ ${warn}` : "";
+  warnEl.classList.toggle("hidden", !warn);
 }
 
 function renderTable() {
@@ -91,9 +108,9 @@ function renderTable() {
     return dir * (av - bv);
   });
   tbody.innerHTML = sorted.map((r) => {
-    const flag = r.breaches_per_name_cap
+    const flag = (r.breaches_per_name_cap
       ? `<span class="badge-breach" title="Min account ${fmtUsd(r.min_account_for_1_contract)}">BREACH</span>`
-      : "";
+      : "") + (r.data_flags || []).map(badge("badge-flag")).join("");
     return `<tr>
       <td>${r.ticker ?? ""}</td>
       <td>${r.sector ?? ""}</td>
@@ -128,9 +145,6 @@ function renderNearMisses(doc) {
   const section = $("#near-miss-section");
   if (!rows.length) { section.classList.add("hidden"); return; }
   section.classList.remove("hidden");
-  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-  const badge = (cls) => (e) =>
-    `<span class="${cls}" title="${esc(e.message || "")}">${esc(e.code || "?")}</span>`;
   $("#near-misses tbody").innerHTML = rows.map((r) => `<tr>
       <td>${r.ticker ?? ""}</td>
       <td>${r.sector ?? ""}</td>
@@ -235,7 +249,62 @@ function renderRun(doc) {
   const dte = t.dte || {}, delta = t.delta || {};
   $("#thresholds-summary").textContent =
     `Thresholds — DTE ${dte.min}-${dte.max} (target ${dte.target}), ` +
-    `|Δ| ${delta.min}-${delta.max} (target ${delta.target}), scoring: ${t.scoring_mode || "—"}.`;
+    `|Δ| ${delta.min}-${delta.max} (target ${delta.target}), scoring: ${t.scoring_mode || "—"}` +
+    (t.unknown_earnings_policy ? `, unknown earnings: ${t.unknown_earnings_policy}` : "") + ".";
+}
+
+// -------------------------------------------------------------- outcomes render
+function renderOutcomes(doc) {
+  const outcomes = Object.values((doc && doc.outcomes) || {});
+  if (!outcomes.length) return; // section stays hidden until contracts resolve
+  $("#outcomes-section").classList.remove("hidden");
+
+  const s = doc.summary || {};
+  const fmtAgg = (a) => (a && a.n
+    ? `${fmtPct(a.win_rate)} win (${a.wins}/${a.n}), avg ROC ${fmtPct(a.avg_realized_roc)}`
+    : "—");
+  $("#outcome-cards").innerHTML = [
+    ["Candidates", fmtAgg(s.candidates)],
+    ["Near misses", fmtAgg(s.near_misses)],
+  ].map(([l, v]) => `<div class="card"><div class="label">${l}</div><div class="value">${v}</div></div>`)
+    .join("");
+
+  // Win rate per rejection code — the gate-calibration chart.
+  const byCode = Object.entries(s.by_rejection_code || {}).filter(([, a]) => a.n);
+  const card = $("#chart-outcome-winrate-card");
+  if (HAS_CHART && byCode.length) {
+    card.classList.remove("hidden");
+    destroyChart("chart-outcome-winrate");
+    charts["chart-outcome-winrate"] = new Chart($("#chart-outcome-winrate"), {
+      type: "bar",
+      data: { labels: byCode.map(([k, a]) => `${k} (n=${a.n})`),
+        datasets: [{ data: byCode.map(([, a]) => (a.win_rate || 0) * 100),
+          backgroundColor: COLORS.accent }] },
+      options: { indexAxis: "y", plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: (c) => `${c.raw.toFixed(1)}% win rate` } } },
+        scales: { x: { grid: { color: COLORS.grid }, min: 0, max: 100,
+          title: { display: true, text: "Win rate %" } },
+          y: { grid: { display: false } } } },
+    });
+  }
+
+  // Most recently resolved contracts.
+  const recent = [...outcomes]
+    .sort((a, b) => String(b.expiration).localeCompare(String(a.expiration)))
+    .slice(0, 20);
+  $("#outcomes tbody").innerHTML = recent.map((o) => `<tr>
+      <td>${o.run_date ?? ""}</td>
+      <td>${esc(o.ticker ?? "")}</td>
+      <td>${o.expiration ?? ""}</td>
+      <td class="num">${fmtNum(o.strike)}</td>
+      <td class="num">${fmtNum(o.premium)}</td>
+      <td class="num">${fmtNum(o.expiry_close)}</td>
+      <td>${o.win
+        ? `<span class="badge-flag" title="Expired above the strike">WIN</span>`
+        : `<span class="badge-reject" title="Expiry close below the strike">BREACH</span>`}</td>
+      <td class="num">${fmtPct(o.realized_roc)}</td>
+      <td>${o.group === "candidate" ? "candidate" : "near miss"}</td>
+    </tr>`).join("");
 }
 
 // -------------------------------------------------------------- history render
@@ -319,6 +388,8 @@ async function main() {
   }
   renderHistory(index);
   populatePicker(index, loadRun);
+  // Outcomes exist only after the first tracked contracts expire — 404 is fine.
+  fetchJson("data/outcomes.json").then(renderOutcomes).catch(() => {});
   await loadRun(index.latest);
 }
 

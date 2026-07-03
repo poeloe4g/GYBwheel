@@ -8,8 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import check_streak
 
 
-def _run(date, light="GREEN", rows=0, demo=False):
-    return {"date": date, "light": light, "row_count": rows, "demo": demo}
+def _run(date, light="GREEN", rows=0, demo=False, **extra):
+    return {"date": date, "light": light, "row_count": rows, "demo": demo, **extra}
 
 
 def test_streak_counts_trailing_zero_runs():
@@ -26,6 +26,14 @@ def test_streak_skips_red_and_demo_runs():
     # RED days and demo seeds are neither zero-streak evidence nor breakers.
     index = {"runs": [_run("d1"), _run("d2", light="RED"), _run("d3"),
                       _run("d4", rows=5, demo=True), _run("d5")]}
+    assert check_streak.zero_candidate_streak(index) == 3
+
+
+def test_streak_skips_untrusted_offhours_runs():
+    # Zero candidates on off-hours (stale-quote) runs is expected, not evidence;
+    # pre-v3 runs without the field still count.
+    index = {"runs": [_run("d1"), _run("d2", quotes_trusted=False),
+                      _run("d3", quotes_trusted=True), _run("d4")]}
     assert check_streak.zero_candidate_streak(index) == 3
 
 

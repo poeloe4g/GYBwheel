@@ -32,6 +32,8 @@ def _summarize(snapshot: dict[str, Any]) -> dict[str, Any]:
         "top_score": max(scores) if scores else None,
         "pct_deployed": header.get("pct_deployed"),
         "demo": bool(meta.get("demo")),
+        # None for pre-v3 snapshots that never stamped a session.
+        "quotes_trusted": meta.get("quotes_trusted"),
     }
 
 
