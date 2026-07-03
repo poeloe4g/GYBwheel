@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import regime as regime_mod
@@ -63,6 +64,10 @@ def run(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     secrets = load_secrets()
     provider = DataProvider(config, secrets)
+    session = _market_session()
+    if session != "regular":
+        log.warning("run is outside regular US market hours — option quotes may be "
+                    "stale or zeroed; snapshot will be stamped quotes_trusted=false")
 
     # 1. Regime check ------------------------------------------------------
     spy_hist = [h["close"] for h in provider.get_price_history("SPY", period="1y")]
@@ -90,6 +95,8 @@ def run(args: argparse.Namespace) -> int:
                     "flags_by_reason": {},
                     "contracts_evaluated": 0,
                     "contract_gate_failures": {},
+                    "market_session": session,
+                    "quotes_trusted": session == "regular",
                 },
             )
         return 0
@@ -222,10 +229,27 @@ def run(args: argparse.Namespace) -> int:
                 "flags_by_reason": flag_counts,
                 "contracts_evaluated": contracts_evaluated,
                 "contract_gate_failures": contract_gate_failures,
+                "market_session": session,
+                "quotes_trusted": session == "regular",
             },
         )
         print(f"Wrote run snapshot to {jout}")
     return 0
+
+
+def _market_session(now: datetime | None = None) -> str:
+    """Approximate US equity session from UTC alone (stdlib, no tz database).
+
+    Weekdays 13:30–20:00 UTC covers regular hours in both EDT and EST with ~1h
+    drift at the edges — the same caveat as the UTC-only CI cron. Holidays are
+    not modeled; a holiday run is merely stamped "regular" with stale quotes,
+    which the freshness badge already covers.
+    """
+    now = now or datetime.now(timezone.utc)
+    if now.weekday() >= 5:
+        return "closed"
+    minutes = now.hour * 60 + now.minute
+    return "regular" if 13 * 60 + 30 <= minutes < 20 * 60 else "closed"
 
 
 _EARNINGS_POLICIES = ("flag", "near_miss", "reject")

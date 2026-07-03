@@ -60,6 +60,39 @@ def test_with_backoff_gives_up_after_max():
                           is_transient=data._is_rate_limited)
 
 
+def test_normalize_zeroed_bid_falls_back_to_last_price():
+    # Off-hours yfinance rows often zero the bid; mid must come from the last
+    # trade, marked indicative — not (0 + ask)/2.
+    raw = {"strike": 52.0, "bid": 0.0, "ask": 2.25, "lastPrice": 1.10,
+           "lastTradeDate": "2026-07-02 15:59:00", "impliedVolatility": 0.30}
+    opt = data.normalize_yf_option(raw, "2099-07-18")
+    assert opt["mid"] == 1.10
+    assert opt["quote_quality"] == "last_price"
+    assert opt["last_price"] == 1.10
+    assert opt["last_trade_date"] == "2026-07-02 15:59:00"
+
+
+def test_normalize_crossed_quote_falls_back_to_last_price():
+    raw = {"strike": 52.0, "bid": 1.50, "ask": 1.00, "lastPrice": 1.20}
+    opt = data.normalize_yf_option(raw, "2099-07-18")
+    assert opt["mid"] == 1.20
+    assert opt["quote_quality"] == "last_price"
+
+
+def test_normalize_dead_quote_has_no_mid():
+    raw = {"strike": 52.0, "bid": 0.0, "ask": 0.0, "lastPrice": 0.0}
+    opt = data.normalize_yf_option(raw, "2099-07-18")
+    assert opt["mid"] is None
+    assert opt["quote_quality"] == "none"  # rejected downstream as no_premium
+
+
+def test_normalize_live_quote_marked_live():
+    raw = {"strike": 95.0, "bid": 0.95, "ask": 1.05, "lastPrice": 0.99}
+    opt = data.normalize_yf_option(raw, "2099-07-18")
+    assert opt["mid"] == 1.0
+    assert opt["quote_quality"] == "live"
+
+
 def test_earnings_from_calendar_shapes():
     from datetime import date
 

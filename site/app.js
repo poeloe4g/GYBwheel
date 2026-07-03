@@ -64,6 +64,9 @@ function renderRegime(doc) {
       el.insertAdjacentHTML("beforeend", `<span class="badge-not-today">not today</span>`);
     }
   }
+  if (doc.meta && doc.meta.quotes_trusted === false) {
+    el.insertAdjacentHTML("beforeend", `<span class="badge-stale" title="This run executed outside regular US market hours — option bid/asks may be stale or zeroed, so gate results are unreliable.">OFF-HOURS DATA</span>`);
+  }
 }
 
 function renderCards(doc) {

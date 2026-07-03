@@ -98,6 +98,18 @@ def test_quality_missing_data_becomes_flags_not_silent_pass(config):
         assert [f["code"] for f in flags] == [code]
 
 
+def test_quality_indicative_quote_skips_spread_gate(config):
+    # Off-hours zeroed bid: the data layer degraded mid to the last trade and
+    # marked the quote; the (meaningless) 200% spread must flag, not reject.
+    q = _quality(config)
+    opt = {"strike": 95.0, "mid": 1.10, "dte": 35, "iv": 0.24,
+           "bid": 0.0, "ask": 2.25, "open_interest": 2500,
+           "quote_quality": "last_price"}
+    rejections, flags = screen.apply_quality_filters(opt, 110.0, q)
+    assert "spread" not in [e["code"] for e in rejections]
+    assert [e["code"] for e in flags] == ["quote_indicative"]
+
+
 def test_quality_tight_absolute_spread_rescues_low_premium(config):
     # $0.08 wide on a $0.50 mid is 16% of mid (> max_spread_pct) but well inside
     # max_spread_abs — an acceptable market for a low-premium contract.

@@ -53,10 +53,27 @@ def normalize_yf_option(raw: dict[str, Any], expiration: str) -> dict[str, Any]:
     yfinance has no Greeks, so ``delta`` is left None and computed downstream by
     the Black-Scholes fallback in ``screen._effective_abs_delta`` from iv/spot/
     strike/dte. Accepts a plain dict (e.g. ``DataFrame.to_dict('records')`` row).
+
+    Quote quality: off-hours yfinance quotes are frequently zeroed or crossed,
+    which used to produce garbage mids and bogus spread rejections. A usable
+    two-sided market (bid > 0, ask >= bid) is ``quote_quality="live"``;
+    otherwise the mid degrades to the last trade (``"last_price"``) or None
+    (``"none"`` — rejected downstream as no_premium). The spread gate only runs
+    on live quotes (see ``screen.apply_quality_filters``).
     """
     bid = _f(raw.get("bid"))
     ask = _f(raw.get("ask"))
-    mid = (bid + ask) / 2 if (bid is not None and ask is not None) else None
+    last_price = _f(raw.get("lastPrice"))
+    last_trade = raw.get("lastTradeDate")
+    if bid is not None and ask is not None and bid > 0 and ask >= bid:
+        mid = (bid + ask) / 2
+        quote_quality = "live"
+    elif last_price is not None and last_price > 0:
+        mid = last_price
+        quote_quality = "last_price"
+    else:
+        mid = None
+        quote_quality = "none"
     return {
         "symbol": raw.get("contractSymbol"),
         "option_type": "put",
@@ -64,6 +81,9 @@ def normalize_yf_option(raw: dict[str, Any], expiration: str) -> dict[str, Any]:
         "bid": bid,
         "ask": ask,
         "mid": mid,
+        "last_price": last_price,
+        "last_trade_date": str(last_trade) if last_trade is not None else None,
+        "quote_quality": quote_quality,
         "delta": None,
         "iv": _f(raw.get("impliedVolatility")),
         "open_interest": _i(raw.get("openInterest")),

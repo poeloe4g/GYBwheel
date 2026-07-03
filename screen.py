@@ -212,6 +212,11 @@ def apply_quality_filters(
 
     if bid is None or ask is None:
         flags.append(_entry("spread_unknown", "no bid/ask from feed — spread gate not evaluated"))
+    elif opt.get("quote_quality", "live") != "live":
+        # Zeroed/crossed off-hours quotes make (ask-bid)/mid meaningless; the
+        # mid already degraded to the last trade in the data layer.
+        flags.append(_entry("quote_indicative",
+                            "bid/ask unusable — mid from last trade; spread gate not evaluated"))
     else:
         sp = formulas.spread_pct(bid, ask)
         spread_abs = ask - bid

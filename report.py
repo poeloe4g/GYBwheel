@@ -21,7 +21,9 @@ from typing import Any
 #       ``spot``; ``meta.flags_by_reason``; ``thresholds.unknown_earnings_policy``;
 #       ``meta.contracts_evaluated`` + ``meta.contract_gate_failures``
 #       (per-contract gate counts across the whole delta band, while
-#       ``rejections_by_reason`` stays per-ticker for history comparability).
+#       ``rejections_by_reason`` stays per-ticker for history comparability);
+#       option rows carry ``last_price``/``last_trade_date``/``quote_quality``;
+#       ``meta.market_session`` + ``meta.quotes_trusted`` stamp off-hours runs.
 SCHEMA_VERSION = 3
 
 CSV_COLUMNS = [

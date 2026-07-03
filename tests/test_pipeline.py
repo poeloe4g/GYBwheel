@@ -144,6 +144,19 @@ def test_green_end_to_end_writes_csv(tmp_path, monkeypatch, capsys):
                 "max_contracts", "sector"):
         assert key in row
     assert doc["header"]["total_capital"] == 50000
+    # Snapshots are stamped with the (approximate) market session.
+    assert doc["meta"]["market_session"] in ("regular", "closed")
+    assert doc["meta"]["quotes_trusted"] == (doc["meta"]["market_session"] == "regular")
+
+
+def test_market_session_from_utc():
+    from datetime import datetime, timezone
+
+    utc = lambda *a: datetime(*a, tzinfo=timezone.utc)  # noqa: E731
+    assert main_mod._market_session(utc(2026, 7, 3, 14, 0)) == "regular"   # Fri 10am ET
+    assert main_mod._market_session(utc(2026, 7, 3, 11, 10)) == "closed"   # pre-market
+    assert main_mod._market_session(utc(2026, 7, 3, 21, 0)) == "closed"    # after close
+    assert main_mod._market_session(utc(2026, 7, 4, 14, 0)) == "closed"    # Saturday
 
 
 def test_near_misses_captured_with_reasons(tmp_path, monkeypatch):
