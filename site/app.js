@@ -15,9 +15,13 @@ const fmtPct = (x) => (x == null ? "—" : (x * 100).toFixed(1) + "%");
 const fmtUsd = (x) => (x == null ? "—" : "$" + Math.round(x).toLocaleString());
 const fmtNum = (x, d = 2) => (x == null ? "—" : Number(x).toFixed(d));
 
-Chart.defaults.color = COLORS.muted;
-Chart.defaults.borderColor = COLORS.grid;
-Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+// If the Chart.js CDN failed, degrade to tables/cards instead of a blank page.
+const HAS_CHART = typeof Chart !== "undefined";
+if (HAS_CHART) {
+  Chart.defaults.color = COLORS.muted;
+  Chart.defaults.borderColor = COLORS.grid;
+  Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+}
 
 async function fetchJson(path) {
   const res = await fetch(path, { cache: "no-store" });
@@ -142,6 +146,7 @@ function renderNearMisses(doc) {
 }
 
 function renderRejectionChart(doc) {
+  if (!HAS_CHART) return;
   const counts = (doc.meta && doc.meta.rejections_by_reason) || {};
   const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   const card = $("#chart-rejections-card");
@@ -159,6 +164,7 @@ function renderRejectionChart(doc) {
 }
 
 function renderRunCharts(doc) {
+  if (!HAS_CHART) return;
   const rows = doc.rows || [];
 
   // Top candidates by score (horizontal bar)
@@ -234,6 +240,7 @@ function renderRun(doc) {
 
 // -------------------------------------------------------------- history render
 function renderHistory(index) {
+  if (!HAS_CHART) return;
   // Demo seed runs would mix fake scores into the real time-series.
   const runs = (index.runs || []).filter((r) => r.date && !r.demo);
   const labels = runs.map((r) => r.date);
