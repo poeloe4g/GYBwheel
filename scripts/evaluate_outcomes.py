@@ -69,7 +69,9 @@ def collect_contracts(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
                 "ticker": ticker,
                 "expiration": exp,
                 "strike": float(strike),
-                "premium": float(mid),
+                # v4 rows carry the conservative-fill premium the run actually
+                # ranked on; realized ROC should match what was screened.
+                "premium": float(r.get("premium_used") or mid),
                 "spot": spot,
                 "group": group,
                 "rejection_codes": [e.get("code") for e in r.get("rejection_reasons") or []],

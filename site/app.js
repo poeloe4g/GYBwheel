@@ -7,16 +7,70 @@ const COLORS = {
 };
 const REGIME_COLOR = { GREEN: COLORS.green, YELLOW: COLORS.yellow, RED: COLORS.red };
 
+// Plain-language framing for the regime traffic light.
+const REGIME_PLAIN = {
+  GREEN: "Market conditions look calm — normal conditions for new trades.",
+  YELLOW: "One caution signal is on — be extra selective with new trades.",
+  RED: "Market stress detected — no new trades suggested; manage existing positions only.",
+};
+const SIGNAL_PLAIN = {
+  spy_below_200dma: "S&P 500 is below its 200-day average",
+  breadth_below_floor: "most stocks are in downtrends",
+  vix_high_and_spy_falling: "volatility is high while the market falls",
+};
+
+// Short human labels for machine reason/flag codes. The exact code + message
+// stay in the hover tooltip for anyone who wants the detail.
+const FRIENDLY_CODE = {
+  earnings: "Earnings before expiry",
+  earnings_unknown: "Earnings date unknown",
+  implied_move: "Too volatile",
+  spread: "Wide bid-ask spread",
+  open_interest: "Thinly traded",
+  distance: "Too little cushion",
+  yield_30dte: "Premium too small",
+  no_premium: "No usable price",
+  missing_strike_dte: "Bad contract data",
+  unaffordable: "Needs more cash than your limits allow",
+  dte_stretched: "Longer expiry than usual",
+  iv_outlier: "Suspicious volatility data",
+  iv_missing: "No volatility data",
+  spread_unknown: "No live quote",
+  oi_unknown: "No liquidity data",
+  quote_indicative: "Price from last trade, not a live quote",
+  universe: "Failed company-quality screen",
+  no_spot: "No stock price",
+  no_put_in_band: "No suitable contract",
+  no_expiry_in_window: "No expiry in the target window",
+};
+const friendly = (code) => FRIENDLY_CODE[code] || code;
+
 const charts = {}; // id -> Chart instance, so we can destroy/redraw on run switch
-let tableState = { key: "score", dir: -1, rows: [] };
+// Default order is _rank: the screener's own ranking (tradeable ideas first,
+// then by score) — clicking a header re-sorts on that column.
+let tableState = { key: "_rank", dir: 1, rows: [] };
 
 const $ = (sel) => document.querySelector(sel);
 const fmtPct = (x) => (x == null ? "—" : (x * 100).toFixed(1) + "%");
+const fmtPct0 = (x) => (x == null ? "—" : Math.round(x * 100) + "%");
 const fmtUsd = (x) => (x == null ? "—" : "$" + Math.round(x).toLocaleString());
 const fmtNum = (x, d = 2) => (x == null ? "—" : Number(x).toFixed(d));
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 const badge = (cls) => (e) =>
-  `<span class="${cls}" title="${esc(e.message || "")}">${esc(e.code || "?")}</span>`;
+  `<span class="${cls}" title="${esc((e.code || "?") + ": " + (e.message || ""))}">${esc(friendly(e.code))}</span>`;
+
+// Derived, layman-facing fields shared by the tables and the top-pick card.
+// Older snapshots lack premium_used/pop — degrade to mid / 1-|delta|.
+function enrich(r, i) {
+  const premium = r.premium_used ?? r.mid;
+  return {
+    ...r,
+    _rank: i,
+    _premium_usd: premium != null ? premium * 100 : null,
+    _cash_needed: r.collateral_per_contract ?? (r.strike != null ? r.strike * 100 : null),
+    _pop: r.pop ?? (r.abs_delta != null ? Math.max(0, Math.min(1, 1 - r.abs_delta)) : null),
+  };
+}
 
 // If the Chart.js CDN failed, degrade to tables/cards instead of a blank page.
 const HAS_CHART = typeof Chart !== "undefined";
@@ -48,10 +102,11 @@ function renderRegime(doc) {
   const banner = $("#regime");
   banner.className = "regime-banner regime-" + light.toLowerCase();
   banner.querySelector(".regime-light").textContent = light;
+  $("#regime-plain").textContent = REGIME_PLAIN[light] || "";
   const tripped = (doc.regime && doc.regime.tripped) || [];
   $("#regime-tripped").textContent = tripped.length
-    ? "Signals tripped: " + tripped.join(", ")
-    : "No risk signals tripped.";
+    ? "Why: " + tripped.map((s) => SIGNAL_PLAIN[s] || s).join("; ") + "."
+    : "No warning signals are on.";
   const ts = doc.meta && doc.meta.generated_at;
   const el = $("#generated-at");
   el.textContent = ts ? "Generated " + new Date(ts).toLocaleString() : "";
@@ -65,8 +120,27 @@ function renderRegime(doc) {
     }
   }
   if (doc.meta && doc.meta.quotes_trusted === false) {
-    el.insertAdjacentHTML("beforeend", `<span class="badge-stale" title="This run executed outside regular US market hours — option bid/asks may be stale or zeroed, so gate results are unreliable.">OFF-HOURS DATA</span>`);
+    el.insertAdjacentHTML("beforeend", `<span class="badge-stale" title="This run executed outside regular US market hours — option prices may be stale or zeroed, so treat today's numbers with suspicion.">OFF-HOURS DATA</span>`);
   }
+}
+
+function renderTopPick(doc) {
+  const section = $("#top-pick");
+  const light = (doc.regime && doc.regime.light) || "UNKNOWN";
+  const rows = (doc.rows || []).map(enrich);
+  // The table is already ranked; the top actionable row is the first that
+  // fits the account. Hide the card on RED days or when nothing qualifies.
+  const pick = rows.find((r) => (r.max_contracts ?? 0) >= 1) || null;
+  if (light === "RED" || !pick) { section.classList.add("hidden"); return; }
+  section.classList.remove("hidden");
+  const cushion = pick.distance_to_strike != null ? ` (${fmtPct(pick.distance_to_strike)} below today's price)` : "";
+  const odds = pick._pop != null ? ` Estimated odds of keeping the full premium: ~${fmtPct0(pick._pop)}.` : "";
+  $("#top-pick-text").innerHTML =
+    `Sell one <strong>${esc(pick.ticker)}</strong> put at strike ` +
+    `<strong>${fmtUsd(pick.strike)}</strong>, expiring <strong>${esc(pick.expiration)}</strong> ` +
+    `(${pick.dte} days). You'd collect about <strong>${fmtUsd(pick._premium_usd)}</strong> now ` +
+    `and set aside <strong>${fmtUsd(pick._cash_needed)}</strong>. You keep the premium as long ` +
+    `as ${esc(pick.ticker)} stays above ${fmtUsd(pick.strike)}${cushion}.${odds}`;
 }
 
 function renderCards(doc) {
@@ -76,17 +150,18 @@ function renderCards(doc) {
   const candidates = String(rows.length) +
     (nearMissCount ? ` (+${nearMissCount} near miss${nearMissCount > 1 ? "es" : ""})` : "");
   const cards = [
-    ["Total capital", fmtUsd(h.total_capital)],
-    ["Deployed", `${fmtUsd(h.deployed)} (${fmtPct(h.pct_deployed)})`],
-    ["Remaining cash", fmtUsd(h.remaining_cash)],
-    ["Candidates", candidates],
-    ["Positions", h.positions_source || "—"],
+    ["Account size", fmtUsd(h.total_capital)],
+    ["Cash already committed", `${fmtUsd(h.deployed)} (${fmtPct(h.pct_deployed)})`],
+    ["Cash available", fmtUsd(h.remaining_cash)],
+    ["Ideas today", candidates],
+    ["Your positions", h.positions_source && h.positions_source.startsWith("greenfield")
+      ? "none loaded" : (h.positions_source || "—")],
   ];
   // Only v3+ rows carry `affordable`; skip the card for older snapshots.
   if (rows.some((r) => r.affordable != null)) {
     const n = rows.filter((r) => r.affordable).length;
-    cards.splice(4, 0, ["Tradeable", rows.length
-      ? `${n} of ${rows.length} fit the per-name cap` : "—"]);
+    cards.splice(4, 0, ["Fit your account", rows.length
+      ? `${n} of ${rows.length} ideas` : "—"]);
   }
   $("#capital-cards").innerHTML = cards
     .map(([l, v]) => `<div class="card"><div class="label">${l}</div><div class="value">${v}</div></div>`)
@@ -109,7 +184,7 @@ function renderTable() {
   });
   tbody.innerHTML = sorted.map((r) => {
     const flag = (r.breaches_per_name_cap
-      ? `<span class="badge-breach" title="Min account ${fmtUsd(r.min_account_for_1_contract)}">BREACH</span>`
+      ? `<span class="badge-breach" title="One contract needs more cash than your per-stock limit. You'd need an account of at least ${fmtUsd(r.min_account_for_1_contract)}.">TOO BIG</span>`
       : "") + (r.data_flags || []).map(badge("badge-flag")).join("");
     return `<tr>
       <td>${r.ticker ?? ""}</td>
@@ -117,15 +192,16 @@ function renderTable() {
       <td>${r.expiration ?? ""}</td>
       <td class="num">${r.dte ?? ""}</td>
       <td class="num">${fmtNum(r.strike)}</td>
-      <td class="num">${fmtNum(r.mid)}</td>
-      <td class="num">${fmtNum(r.abs_delta)}</td>
+      <td class="num">${fmtUsd(r._premium_usd)}</td>
+      <td class="num">${fmtUsd(r._cash_needed)}</td>
+      <td class="num">${fmtPct0(r._pop)}</td>
       <td class="num">${fmtPct(r.annualized_yield)}</td>
       <td class="num">${fmtPct(r.distance_to_strike)}</td>
       <td class="num">${fmtNum(r.score, 3)}</td>
       <td class="num">${r.max_contracts ?? ""}</td>
       <td>${flag}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="12" class="muted">No qualifying candidates.</td></tr>`;
+  }).join("") || `<tr><td colspan="13" class="muted">No ideas passed every safety check today. Check the near misses below to see what almost made it.</td></tr>`;
 }
 
 function wireTableSort() {
@@ -141,7 +217,7 @@ function wireTableSort() {
 }
 
 function renderNearMisses(doc) {
-  const rows = doc.near_misses || [];
+  const rows = (doc.near_misses || []).map(enrich);
   const section = $("#near-miss-section");
   if (!rows.length) { section.classList.add("hidden"); return; }
   section.classList.remove("hidden");
@@ -151,7 +227,7 @@ function renderNearMisses(doc) {
       <td>${r.expiration ?? ""}</td>
       <td class="num">${r.dte ?? ""}</td>
       <td class="num">${fmtNum(r.strike)}</td>
-      <td class="num">${fmtNum(r.mid)}</td>
+      <td class="num">${fmtUsd(r._premium_usd)}</td>
       <td class="num">${fmtPct(r.annualized_yield)}</td>
       <td class="num">${fmtPct(r.distance_to_strike)}</td>
       <td class="num">${fmtNum(r.score, 3)}</td>
@@ -169,9 +245,10 @@ function renderRejectionChart(doc) {
   card.classList.remove("hidden");
   charts["chart-rejections"] = new Chart($("#chart-rejections"), {
     type: "bar",
-    data: { labels: entries.map(([k]) => k),
+    data: { labels: entries.map(([k]) => friendly(k)),
       datasets: [{ data: entries.map(([, v]) => v), backgroundColor: COLORS.yellow }] },
-    options: { indexAxis: "y", plugins: { legend: { display: false } },
+    options: { indexAxis: "y", plugins: { legend: { display: false },
+      tooltip: { callbacks: { label: (c) => `${c.raw} stock${c.raw === 1 ? "" : "s"}` } } },
       scales: { x: { grid: { color: COLORS.grid }, ticks: { precision: 0 } },
         y: { grid: { display: false } } } },
   });
@@ -179,7 +256,7 @@ function renderRejectionChart(doc) {
 
 function renderRunCharts(doc) {
   if (!HAS_CHART) return;
-  const rows = doc.rows || [];
+  const rows = (doc.rows || []).map(enrich);
 
   // Top candidates by score (horizontal bar)
   const top = [...rows].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 10);
@@ -201,9 +278,9 @@ function renderRunCharts(doc) {
         y: (r.annualized_yield || 0) * 100, r: 4 + 2 * (r.max_contracts || 0), ticker: r.ticker })),
       backgroundColor: "rgba(74,158,255,0.55)" }] },
     options: { plugins: { legend: { display: false },
-      tooltip: { callbacks: { label: (c) => `${c.raw.ticker}: ${c.raw.y.toFixed(1)}% ann @ ${c.raw.x.toFixed(1)}% dist` } } },
-      scales: { x: { title: { display: true, text: "Distance to strike %" }, grid: { color: COLORS.grid } },
-        y: { title: { display: true, text: "Annualized yield %" }, grid: { color: COLORS.grid } } } },
+      tooltip: { callbacks: { label: (c) => `${c.raw.ticker}: ${c.raw.y.toFixed(1)}% yearly yield with a ${c.raw.x.toFixed(1)}% cushion` } } },
+      scales: { x: { title: { display: true, text: "Safety cushion % (room to fall)" }, grid: { color: COLORS.grid } },
+        y: { title: { display: true, text: "Yearly yield %" }, grid: { color: COLORS.grid } } } },
   });
 
   // Deployable collateral by sector (doughnut)
@@ -227,7 +304,7 @@ function renderRunCharts(doc) {
   destroyChart("chart-deployed");
   charts["chart-deployed"] = new Chart($("#chart-deployed"), {
     type: "doughnut",
-    data: { labels: ["Deployed", "Remaining"],
+    data: { labels: ["Committed", "Available"],
       datasets: [{ data: [pct, Math.max(0, 1 - pct)],
         backgroundColor: [COLORS.accent, COLORS.grid] }] },
     options: { circumference: 180, rotation: -90, cutout: "70%",
@@ -238,8 +315,9 @@ function renderRunCharts(doc) {
 
 function renderRun(doc) {
   renderRegime(doc);
+  renderTopPick(doc);
   renderCards(doc);
-  tableState.rows = doc.rows || [];
+  tableState.rows = (doc.rows || []).map(enrich);
   renderTable();
   renderNearMisses(doc);
   renderRejectionChart(doc);
@@ -248,8 +326,8 @@ function renderRun(doc) {
   const t = doc.thresholds || {};
   const dte = t.dte || {}, delta = t.delta || {};
   $("#thresholds-summary").textContent =
-    `Thresholds — DTE ${dte.min}-${dte.max} (target ${dte.target}), ` +
-    `|Δ| ${delta.min}-${delta.max} (target ${delta.target}), scoring: ${t.scoring_mode || "—"}` +
+    `Screener settings — expiry window ${dte.min}-${dte.max} days (target ${dte.target}), ` +
+    `|Δ| ${delta.min}-${delta.max} (target ${delta.target}), ranking: ${t.scoring_mode || "—"}` +
     (t.unknown_earnings_policy ? `, unknown earnings: ${t.unknown_earnings_policy}` : "") + ".";
 }
 
@@ -261,11 +339,11 @@ function renderOutcomes(doc) {
 
   const s = doc.summary || {};
   const fmtAgg = (a) => (a && a.n
-    ? `${fmtPct(a.win_rate)} win (${a.wins}/${a.n}), avg ROC ${fmtPct(a.avg_realized_roc)}`
+    ? `${fmtPct(a.win_rate)} win (${a.wins}/${a.n}), avg return ${fmtPct(a.avg_realized_roc)}`
     : "—");
   $("#outcome-cards").innerHTML = [
-    ["Candidates", fmtAgg(s.candidates)],
-    ["Near misses", fmtAgg(s.near_misses)],
+    ["Accepted ideas", fmtAgg(s.candidates)],
+    ["Excluded ideas (near misses)", fmtAgg(s.near_misses)],
   ].map(([l, v]) => `<div class="card"><div class="label">${l}</div><div class="value">${v}</div></div>`)
     .join("");
 
@@ -277,7 +355,7 @@ function renderOutcomes(doc) {
     destroyChart("chart-outcome-winrate");
     charts["chart-outcome-winrate"] = new Chart($("#chart-outcome-winrate"), {
       type: "bar",
-      data: { labels: byCode.map(([k, a]) => `${k} (n=${a.n})`),
+      data: { labels: byCode.map(([k, a]) => `${friendly(k)} (n=${a.n})`),
         datasets: [{ data: byCode.map(([, a]) => (a.win_rate || 0) * 100),
           backgroundColor: COLORS.accent }] },
       options: { indexAxis: "y", plugins: { legend: { display: false },
@@ -300,10 +378,10 @@ function renderOutcomes(doc) {
       <td class="num">${fmtNum(o.premium)}</td>
       <td class="num">${fmtNum(o.expiry_close)}</td>
       <td>${o.win
-        ? `<span class="badge-flag" title="Expired above the strike">WIN</span>`
-        : `<span class="badge-reject" title="Expiry close below the strike">BREACH</span>`}</td>
+        ? `<span class="badge-flag" title="The stock stayed above the strike — the seller kept the full premium.">WIN</span>`
+        : `<span class="badge-reject" title="The stock closed below the strike — the seller would have to buy the shares.">BREACH</span>`}</td>
       <td class="num">${fmtPct(o.realized_roc)}</td>
-      <td>${o.group === "candidate" ? "candidate" : "near miss"}</td>
+      <td>${o.group === "candidate" ? "accepted" : "near miss"}</td>
     </tr>`).join("");
 }
 
@@ -336,14 +414,14 @@ function renderHistory(index) {
     });
   };
   line("#hist-top-score", runs.map((r) => r.top_score), "Top score", COLORS.accent);
-  line("#hist-deployed", runs.map((r) => (r.pct_deployed || 0) * 100), "% deployed", COLORS.yellow);
+  line("#hist-deployed", runs.map((r) => (r.pct_deployed || 0) * 100), "% committed", COLORS.yellow);
 
   // Candidates + near misses share one chart; old index rows lack near_miss_count.
   destroyChart("#hist-count");
   charts["#hist-count"] = new Chart($("#hist-count"), {
     type: "line",
     data: { labels, datasets: [
-      { label: "Candidates", data: runs.map((r) => r.row_count),
+      { label: "Ideas", data: runs.map((r) => r.row_count),
         borderColor: COLORS.green, backgroundColor: COLORS.green, tension: 0.2, pointRadius: 3 },
       { label: "Near misses", data: runs.map((r) => r.near_miss_count ?? null),
         borderColor: COLORS.muted, backgroundColor: COLORS.muted,

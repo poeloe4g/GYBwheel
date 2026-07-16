@@ -52,9 +52,16 @@ credentials, so no API key is required to run. All thresholds live in
    `affordable: false`) with `min_account_for_1_contract`, never silently
    dropped; `account.require_affordable: true` demotes them instead. Smaller
    accounts can screen `data/universe_affordable.txt` via `--tickers-file`.
-6. **Score** (`score.py`) — `annualized_yield × distance ÷ max(implied_move,
-   floor)`, or `annualized_yield_only`; components always exposed.
-   `scoring.prefer_affordable` ranks tradeable candidates first.
+6. **Score** (`score.py`) — default `risk_adjusted`: `annualized_yield ×
+   (1 − |Δ|) × distance ÷ max(implied_move, floor)` — expected yield (premium
+   weighted by the probability of keeping it) per unit of cushion-adjusted
+   risk. `blended` (no probability weight) and `annualized_yield_only` remain
+   available; components (`pop`, `iv_used`, `implied_move`) always exposed.
+   Yields are computed from a conservative fill (`scoring.premium_basis:
+   conservative` = halfway between bid and mid) rather than the optimistic raw
+   mid; junk per-contract IVs fall back to the in-band median for the implied
+   move. `scoring.prefer_affordable` ranks tradeable candidates first;
+   `prefer_live_quotes` ranks live-quote rows above last-trade-priced ones.
 7. **Report** (`report.py`) — header + ranked table to console and CSV.
 8. **Outcomes** (`scripts/evaluate_outcomes.py`, run by CI) — once contracts
    expire, candidates *and* near-misses are scored (win = expired above
@@ -82,8 +89,12 @@ The screener runs unattended in CI and publishes its results — recommendations
 analysis, and graphs — to a static webpage.
 
 - **Compute:** `.github/workflows/screen.yml` runs the screener on a weekday
-  market-hours cron (and on-demand via *Run workflow*), then commits a dated
-  JSON snapshot.
+  market-hours cron (17:30 UTC — early enough that GitHub's routinely-late
+  scheduler plus the run itself still finish before the 20:00 UTC close; runs
+  are stamped `quotes_trusted` only when both the start *and* end of the run
+  fall in regular hours), then commits a dated JSON snapshot. CI alerts (as
+  GitHub issues) fire on workflow failure, on a 3+-run zero-candidate streak,
+  and on a 3+-run off-hours (`quotes_trusted: false`) streak.
 - **View:** a no-build static site in `site/` (Chart.js via CDN) reads the JSON and
   renders the regime banner, capital summary (incl. a "Tradeable: N of M" card
   and the B1 capital warning), a ranked candidates table (flag badges), a
@@ -97,7 +108,11 @@ analysis, and graphs — to a static webpage.
   outside regular market hours (`meta.quotes_trusted: false` — such runs are
   also excluded from the zero-candidate alert streak).
 
-`main.py --json-out PATH` writes one self-contained run snapshot (schema v3 —
+The site opens with a plain-English "What is this?" guide and a "Today's top
+idea" sentence card; table headers, badges, and rejection reasons are rendered
+in lay terms (the machine codes stay in hover tooltips).
+
+`main.py --json-out PATH` writes one self-contained run snapshot (schema v4 —
 versions are additive and readers never gate on the number; the field list is
 documented in `report.py`). `scripts/build_index.py` rebuilds
 `site/data/index.json` + `latest.json` from `site/data/runs/*.json`;

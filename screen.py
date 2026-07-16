@@ -129,7 +129,10 @@ def evaluate_puts(
 
         for e in rejections:
             gate_failures[e["code"]] = gate_failures.get(e["code"], 0) + 1
-        evaluated.append({**opt, "rejections": rejections, "flags": flags})
+        # iv_band_median rides along so scoring can swap a junk/missing
+        # per-contract IV for the band's median (see score._robust_iv).
+        evaluated.append({**opt, "iv_band_median": median_iv,
+                          "rejections": rejections, "flags": flags})
         outlier_flags.append(is_outlier)
 
     def delta_dist(o: dict[str, Any]) -> float:

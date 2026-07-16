@@ -63,7 +63,7 @@ def test_write_json_near_misses_roundtrip(tmp_path):
         generated_at=datetime(2026, 7, 3, 19, 45, tzinfo=timezone.utc),
     )
     doc = json.loads(out.read_text())
-    assert doc["schema_version"] == 3
+    assert doc["schema_version"] == 4
     assert doc["near_misses"][0]["ticker"] == "BBB"
     assert doc["near_misses"][0]["rejection_reasons"][0]["code"] == "spread"
     assert doc["meta"]["near_miss_count"] == 1

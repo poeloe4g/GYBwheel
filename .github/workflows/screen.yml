@@ -2,11 +2,15 @@ name: Screen and publish dashboard
 
 on:
   schedule:
-    # 19:45 UTC, Mon–Fri: 3:45pm ET during EDT, 2:45pm ET during EST — inside
-    # regular market hours either way, so option quotes are live (after-close
-    # yfinance bid/asks are stale/zeroed and blow up the spread gate).
+    # 17:30 UTC, Mon–Fri: 1:30pm ET during EDT, 12:30pm ET during EST — deep
+    # inside regular market hours either way, so option quotes are live
+    # (after-close yfinance bid/asks are stale/zeroed and blow up the spread
+    # gate). GitHub's scheduler routinely fires 30–60+ minutes late and the
+    # full-universe run itself takes up to an hour; the previous 19:45 slot
+    # meant every quote fetch landed AFTER the 20:00 UTC close, so every run
+    # was stamped quotes_trusted=false. 17:30 leaves ~2.5h of buffer.
     # GitHub cron is UTC-only and ignores DST — accept ~1h drift.
-    - cron: "45 19 * * 1-5"
+    - cron: "30 17 * * 1-5"
   workflow_dispatch:
     inputs:
       tickers:
@@ -88,6 +92,14 @@ jobs:
         continue-on-error: true
         run: python scripts/check_streak.py --index site/data/index.json --threshold 3
 
+      # Exit 1 when the last 3 stamped runs all executed off-hours — the cron
+      # is landing after the close, quotes are stale, and the zero-candidate
+      # alert above is disarmed (it skips untrusted runs), so alert separately.
+      - name: Check untrusted-quotes streak
+        id: untrusted
+        continue-on-error: true
+        run: python scripts/check_streak.py --index site/data/index.json --threshold 3 --mode untrusted
+
       - name: Commit snapshot
         run: |
           git config user.name "github-actions[bot]"
@@ -135,6 +147,37 @@ jobs:
               await github.rest.issues.createComment({
                 ...context.repo, issue_number: open[0].number,
                 body: `Still zero candidates: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}` });
+            } else {
+              try {
+                await github.rest.issues.createLabel({ ...context.repo, name: label, color: "e0a800" });
+              } catch (e) { /* label already exists */ }
+              await github.rest.issues.create({ ...context.repo, title, body, labels: [label] });
+            }
+
+      - name: Alert on untrusted-quotes streak
+        if: steps.untrusted.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = "untrusted-quotes";
+            const title = "Screener has run outside market hours for 3+ runs";
+            const body = [
+              "The last 3+ scheduled runs were stamped `quotes_trusted: false` —",
+              "option chains were fetched outside regular US market hours, so",
+              "bid/asks are stale or zeroed and gate results are unreliable.",
+              "The cron schedule is probably firing too close to (or after) the",
+              "20:00 UTC close; move it earlier in `.github/workflows/screen.yml`.",
+              "",
+              `Latest run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              "",
+              "Closing this issue re-arms the alert.",
+            ].join("\n");
+            const { data: open } = await github.rest.issues.listForRepo({
+              ...context.repo, state: "open", labels: label, per_page: 1 });
+            if (open.length) {
+              await github.rest.issues.createComment({
+                ...context.repo, issue_number: open[0].number,
+                body: `Still off-hours: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}` });
             } else {
               try {
                 await github.rest.issues.createLabel({ ...context.repo, name: label, color: "e0a800" });

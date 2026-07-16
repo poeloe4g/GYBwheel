@@ -60,37 +60,38 @@ def build_universe(
         and cached.get("candidates_hash") == cand_hash
     ):
         log.info("Using cached universe from %s (%d names)", cached["built"], len(cached["names"]))
-        return cached["names"], cached.get("rejects", [])
+        names, rejects = cached["names"], cached.get("rejects", [])
+        # A transient fundamentals fetch error must not exclude a name for the
+        # whole cache window — retry just the errored tickers on every hit.
+        errored = [r["ticker"] for r in rejects if r.get("transient")]
+        if errored:
+            log.info("retrying %d cached fundamentals errors: %s", len(errored), errored)
+            retried_passing, retried_rejects = _screen_tickers(errored, provider, u)
+            names = names + retried_passing
+            rejects = [r for r in rejects if not r.get("transient")] + retried_rejects
+            provider.cache.set("universe", "passing", {
+                **cached, "names": names, "rejects": rejects,
+            })
+        return names, rejects
 
     ban = {t.upper() for t in u.get("ban_list", [])}
     allow = {t.upper() for t in u.get("allow_list", [])}
 
-    passing: list[dict[str, Any]] = []
+    prefiltered: list[str] = []
     rejects: list[dict[str, str]] = []
-
-    def drop(sym: str, message: str) -> None:
-        log.info("DROP %s: %s", sym, message)
-        rejects.append({"ticker": sym, "code": "universe", "message": message})
-
     for ticker in candidates:
         sym = ticker.upper()
         if sym in ban:
-            drop(sym, "on ban list")
-            continue
-        if allow and sym not in allow:
-            drop(sym, "not on allow list")
-            continue
-        try:
-            f = provider.get_fundamentals(sym)
-        except Exception as exc:  # noqa: BLE001
-            log.warning("DROP %s: fundamentals error: %s", sym, exc)
-            rejects.append({"ticker": sym, "code": "universe", "message": f"fundamentals error: {exc}"})
-            continue
-        reason = _passes_fundamentals(f, u)
-        if reason:
-            drop(sym, reason)
-            continue
-        passing.append(f)
+            log.info("DROP %s: on ban list", sym)
+            rejects.append({"ticker": sym, "code": "universe", "message": "on ban list"})
+        elif allow and sym not in allow:
+            log.info("DROP %s: not on allow list", sym)
+            rejects.append({"ticker": sym, "code": "universe", "message": "not on allow list"})
+        else:
+            prefiltered.append(sym)
+
+    passing, screen_rejects = _screen_tickers(prefiltered, provider, u)
+    rejects.extend(screen_rejects)
 
     provider.cache.set("universe", "passing", {
         "built": date.today().isoformat(),
@@ -98,6 +99,33 @@ def build_universe(
         "names": passing,
         "rejects": rejects,
     })
+    return passing, rejects
+
+
+def _screen_tickers(
+    tickers: list[str], provider: Any, u: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """Fetch fundamentals and apply the 1.1 filters to ``tickers``.
+
+    Fetch failures are marked ``transient: True`` so the cache-hit path knows
+    to retry them instead of treating a rate-limit blip as a week-long drop.
+    """
+    passing: list[dict[str, Any]] = []
+    rejects: list[dict[str, str]] = []
+    for sym in tickers:
+        try:
+            f = provider.get_fundamentals(sym)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("DROP %s: fundamentals error: %s", sym, exc)
+            rejects.append({"ticker": sym, "code": "universe",
+                            "message": f"fundamentals error: {exc}", "transient": True})
+            continue
+        reason = _passes_fundamentals(f, u)
+        if reason:
+            log.info("DROP %s: %s", sym, reason)
+            rejects.append({"ticker": sym, "code": "universe", "message": reason})
+            continue
+        passing.append(f)
     return passing, rejects
 
 

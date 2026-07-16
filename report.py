@@ -26,10 +26,18 @@ from typing import Any
 #       ``meta.market_session`` + ``meta.quotes_trusted`` stamp off-hours runs;
 #       sized rows carry ``affordable``; ``meta.capital_warning`` surfaces the
 #       B1 capital sanity check (null when the account fits the universe).
-SCHEMA_VERSION = 3
+#   v4: rows may carry ``premium_used``/``premium_basis`` (conservative-fill
+#       premium the yields are computed from), ``pop`` (1 - |delta|, the
+#       probability the put expires worthless), ``iv_used``/``iv_band_median``
+#       (robust IV actually used for the implied move); ``score_mode`` may be
+#       ``risk_adjusted``; ``meta.market_session_end`` stamps the session at
+#       the END of the run too (``quotes_trusted`` requires both endpoints in
+#       regular hours).
+SCHEMA_VERSION = 4
 
 CSV_COLUMNS = [
-    "ticker", "sector", "expiration", "dte", "strike", "mid", "abs_delta",
+    "ticker", "sector", "expiration", "dte", "strike", "mid", "premium_used",
+    "abs_delta", "pop",
     "roc", "annualized_yield", "yield_30dte", "distance_to_strike", "implied_move",
     "score", "max_contracts", "collateral_per_contract", "affordable",
     "breaches_per_name_cap", "min_account_for_1_contract", "flags",
