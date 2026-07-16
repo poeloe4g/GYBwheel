@@ -14,6 +14,36 @@
   </header>
 
   <main>
+    <!-- Plain-English intro -->
+    <details class="explainer" id="what-is-this">
+      <summary>What is this? (plain-English guide)</summary>
+      <div class="explainer-body">
+        <p>This page screens for <strong>cash-secured puts</strong> — a conservative options
+        trade where you get <strong>paid cash today</strong> for promising to buy a
+        high-quality stock at a <strong>discount price</strong> (the <em>strike</em>) if it
+        falls that far by a set date. If the stock stays above the strike, you simply keep
+        the cash. If it falls below, you buy shares you already wanted — at the discount —
+        and can sell "covered calls" against them (the "wheel").</p>
+        <p>Every weekday the screener scans large, profitable companies and lists contracts
+        that pass its safety checks: no earnings announcement before the expiry date, a
+        reasonable price cushion, decent trading volume, and a premium worth the wait. It
+        <strong>never trades</strong> — it only suggests, and you decide.</p>
+        <ul>
+          <li><strong>Traffic light</strong> (top): whether overall market conditions favor
+            opening new trades at all.</li>
+          <li><strong>Today's ideas</strong>: the ranked table. Higher score = better
+            premium for the risk taken.</li>
+          <li><strong>Near misses</strong>: ideas that failed exactly one or two checks —
+            shown so you can see <em>why</em> they were excluded.</li>
+          <li><strong>Track record</strong>: once suggested contracts expire, this page
+            grades its own past suggestions.</li>
+        </ul>
+        <p class="muted">Educational tool only. Options involve risk; you can lose money —
+        including being obligated to buy shares that keep falling. Nothing here is
+        investment advice.</p>
+      </div>
+    </details>
+
     <div id="demo-notice" class="notice hidden">
       Showing <strong>demo seed data</strong>. The first scheduled screener run will replace this.
     </div>
@@ -24,9 +54,18 @@
     <section id="regime" class="regime-banner regime-unknown">
       <div class="regime-light">—</div>
       <div class="regime-meta">
-        <div id="regime-tripped" class="regime-tripped"></div>
+        <div id="regime-plain" class="regime-plain"></div>
+        <div id="regime-tripped" class="regime-tripped muted"></div>
         <div id="generated-at" class="muted"></div>
       </div>
+    </section>
+
+    <!-- Today's top idea -->
+    <section id="top-pick" class="top-pick hidden">
+      <div class="top-pick-label">Today's top idea</div>
+      <div id="top-pick-text" class="top-pick-text"></div>
+      <div class="muted">Ranked #1 after all safety checks. Not investment advice — always
+        verify the numbers with your broker before trading.</div>
     </section>
 
     <!-- Capital summary -->
@@ -40,38 +79,41 @@
 
     <!-- Per-run charts -->
     <section class="chart-grid">
-      <figure class="chart-card"><figcaption>Top candidates by score</figcaption>
+      <figure class="chart-card"><figcaption>Best ideas by score (higher = better premium for the risk)</figcaption>
         <canvas id="chart-top-score"></canvas></figure>
-      <figure class="chart-card"><figcaption>Annualized yield vs. distance to strike</figcaption>
+      <figure class="chart-card"><figcaption>Yearly yield vs. safety cushion (bigger bubble = more contracts fit your account)</figcaption>
         <canvas id="chart-yield-distance"></canvas></figure>
-      <figure class="chart-card"><figcaption>Deployable collateral by sector</figcaption>
+      <figure class="chart-card"><figcaption>Where the money would go, by sector</figcaption>
         <canvas id="chart-sector"></canvas></figure>
-      <figure class="chart-card"><figcaption>Capital deployed</figcaption>
+      <figure class="chart-card"><figcaption>How much of your cash is committed</figcaption>
         <canvas id="chart-deployed"></canvas></figure>
       <figure class="chart-card hidden" id="chart-rejections-card">
-        <figcaption>Rejections by reason</figcaption>
+        <figcaption>Why ideas were excluded today</figcaption>
         <canvas id="chart-rejections"></canvas></figure>
     </section>
 
     <!-- Candidates table -->
     <section>
-      <h2>Ranked candidates</h2>
+      <h2>Today's ideas — ranked</h2>
+      <p class="muted">Each row = sell one put option contract. Click a column header to
+        re-sort. Hover the <span class="th-help">dotted</span> headers for what they mean.</p>
       <div class="table-wrap">
         <table id="candidates">
           <thead>
             <tr>
-              <th data-key="ticker">Ticker</th>
+              <th data-key="ticker">Stock</th>
               <th data-key="sector">Sector</th>
-              <th data-key="expiration">Exp</th>
-              <th data-key="dte" class="num">DTE</th>
-              <th data-key="strike" class="num">Strike</th>
-              <th data-key="mid" class="num">Mid</th>
-              <th data-key="abs_delta" class="num">|Δ|</th>
-              <th data-key="annualized_yield" class="num">Ann %</th>
-              <th data-key="distance_to_strike" class="num">Dist %</th>
-              <th data-key="score" class="num">Score</th>
-              <th data-key="max_contracts" class="num">Max</th>
-              <th data-key="flags">Flags</th>
+              <th data-key="expiration" title="The date the contract ends.">Expires</th>
+              <th data-key="dte" class="num" title="Days until the contract expires.">Days</th>
+              <th data-key="strike" class="num" title="The price you'd be promising to buy the stock at — always below today's price.">Buy&nbsp;at&nbsp;$</th>
+              <th data-key="_premium_usd" class="num" title="Cash you collect today for one contract (100 shares), at a realistic fill price.">You&nbsp;get&nbsp;$</th>
+              <th data-key="_cash_needed" class="num" title="Cash your broker sets aside in case you have to buy the shares (strike × 100).">Cash&nbsp;needed&nbsp;$</th>
+              <th data-key="_pop" class="num" title="Estimated probability the option expires worthless and you keep the premium, from the option's delta.">Odds&nbsp;you&nbsp;keep&nbsp;it</th>
+              <th data-key="annualized_yield" class="num" title="The premium as a return on the cash set aside, scaled to a full year.">Yearly&nbsp;yield</th>
+              <th data-key="distance_to_strike" class="num" title="How far the stock can fall before you'd have to buy it.">Cushion</th>
+              <th data-key="score" class="num" title="The ranking number: yearly yield × odds of keeping the premium × cushion relative to expected volatility. Higher is better.">Score</th>
+              <th data-key="max_contracts" class="num" title="How many contracts fit your account's risk limits. 0 = one contract already needs more cash than your limits allow.">Fits</th>
+              <th data-key="flags">Notes</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -81,23 +123,24 @@
 
     <!-- Near misses -->
     <section id="near-miss-section" class="hidden">
-      <h2>Near misses</h2>
-      <p class="muted">Sized and scored like candidates, but rejected by a quality gate
-        or carrying missing-data flags (hover a badge for the reason).</p>
+      <h2>Near misses — excluded, and why</h2>
+      <p class="muted">These were sized and scored like the ideas above, but failed a safety
+        check (red note) or had missing data (gray note). Hover a note for the exact reason.
+        They are tracked over time to check whether the screener's rules are too strict.</p>
       <div class="table-wrap">
         <table id="near-misses">
           <thead>
             <tr>
-              <th>Ticker</th>
+              <th>Stock</th>
               <th>Sector</th>
-              <th>Exp</th>
-              <th class="num">DTE</th>
-              <th class="num">Strike</th>
-              <th class="num">Mid</th>
-              <th class="num">Ann %</th>
-              <th class="num">Dist %</th>
+              <th>Expires</th>
+              <th class="num">Days</th>
+              <th class="num">Buy&nbsp;at&nbsp;$</th>
+              <th class="num">You&nbsp;get&nbsp;$</th>
+              <th class="num">Yearly&nbsp;yield</th>
+              <th class="num">Cushion</th>
               <th class="num">Score</th>
-              <th>Reasons</th>
+              <th>Why excluded</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -107,29 +150,31 @@
 
     <!-- Outcomes (appears once the first contracts expire) -->
     <section id="outcomes-section" class="hidden">
-      <h2>Outcomes</h2>
-      <p class="muted">Resolved contracts from past runs. Win = the put expired with the
-        close above the strike; realized ROC approximates assignment at the expiry close.
-        Near misses are scored too — a rejection reason whose win rate matches the
-        candidates' marks a gate that is too tight.</p>
+      <h2>Track record</h2>
+      <p class="muted">Once a suggested contract's expiry date passes, it is graded:
+        <strong>WIN</strong> means the stock stayed above the strike, so the seller kept the
+        full premium; <strong>BREACH</strong> means it closed below and the seller would own
+        the shares (the return shown assumes buying at the strike and marks the loss at the
+        expiry-day price). Near misses are graded too — if excluded ideas win just as often
+        as accepted ones, a safety check may be too strict.</p>
       <section class="cards" id="outcome-cards"></section>
       <div class="chart-grid">
         <figure class="chart-card hidden" id="chart-outcome-winrate-card">
-          <figcaption>Near-miss win rate by rejection reason</figcaption>
+          <figcaption>Win rate of excluded ideas, by exclusion reason</figcaption>
           <canvas id="chart-outcome-winrate"></canvas></figure>
       </div>
       <div class="table-wrap">
         <table id="outcomes">
           <thead>
             <tr>
-              <th>Run</th>
-              <th>Ticker</th>
-              <th>Exp</th>
-              <th class="num">Strike</th>
-              <th class="num">Premium</th>
-              <th class="num">Expiry close</th>
+              <th>Suggested on</th>
+              <th>Stock</th>
+              <th>Expired</th>
+              <th class="num">Buy&nbsp;at&nbsp;$</th>
+              <th class="num">Premium&nbsp;$</th>
+              <th class="num">Price at expiry</th>
               <th>Result</th>
-              <th class="num">Realized ROC</th>
+              <th class="num" title="Premium kept minus any paper loss, as a % of the cash set aside.">Return</th>
               <th>Group</th>
             </tr>
           </thead>
@@ -141,14 +186,15 @@
     <!-- History charts -->
     <section>
       <h2>History</h2>
+      <p class="muted">How the screener's output has evolved run by run.</p>
       <div class="chart-grid">
-        <figure class="chart-card"><figcaption>Regime over time</figcaption>
+        <figure class="chart-card"><figcaption>Market traffic light over time</figcaption>
           <canvas id="hist-regime"></canvas></figure>
-        <figure class="chart-card"><figcaption>Top score over time</figcaption>
+        <figure class="chart-card"><figcaption>Best available score over time</figcaption>
           <canvas id="hist-top-score"></canvas></figure>
-        <figure class="chart-card"><figcaption>Qualifying candidates over time</figcaption>
+        <figure class="chart-card"><figcaption>Ideas found per run (solid) vs. near misses (dashed)</figcaption>
           <canvas id="hist-count"></canvas></figure>
-        <figure class="chart-card"><figcaption>% deployed over time</figcaption>
+        <figure class="chart-card"><figcaption>% of cash committed over time</figcaption>
           <canvas id="hist-deployed"></canvas></figure>
       </div>
     </section>

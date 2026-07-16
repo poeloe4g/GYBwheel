@@ -59,7 +59,10 @@ def size_candidate(
     max_pct_deployed = float(acct["max_pct_deployed"])
 
     strike = float(candidate["strike"])
-    premium = float(candidate["mid"])
+    # premium_used (main._effective_premium) is the conservative expected fill;
+    # yields computed from it, not the optimistic raw mid, so the ranking
+    # reflects money you can realistically collect.
+    premium = float(candidate.get("premium_used") or candidate["mid"])
     dte = int(candidate["dte"])
     ticker = (candidate.get("ticker") or "").upper()
     sector = candidate.get("sector", "Unknown")

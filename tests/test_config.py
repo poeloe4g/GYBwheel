@@ -8,7 +8,7 @@ def test_load_config_has_corrected_fields(config):
     assert "avoid_earnings_before_expiry" in q
     assert "risk_free_rate" in q
     assert "score_denominator_floor" in q
-    assert config["scoring"]["mode"] in ("blended", "annualized_yield_only")
+    assert config["scoring"]["mode"] in ("risk_adjusted", "blended", "annualized_yield_only")
     assert "universe_refresh_days" in config["data"]
     assert "cache_dir" in config["data"]
 

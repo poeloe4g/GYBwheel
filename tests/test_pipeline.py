@@ -118,7 +118,7 @@ def test_red_regime_short_circuits(tmp_path, monkeypatch, capsys):
     assert not (tmp_path / "out.csv").exists()  # stopped before writing
     # RED days still appear on the dashboard timeline, with no candidates.
     doc = json.loads(json_out.read_text())
-    assert doc["schema_version"] == 3
+    assert doc["schema_version"] == 4
     assert doc["regime"]["light"] == "RED"
     assert doc["rows"] == []
     assert doc["near_misses"] == []
@@ -142,7 +142,7 @@ def test_green_end_to_end_writes_csv(tmp_path, monkeypatch, capsys):
 
     # JSON snapshot mirrors the run for the dashboard.
     doc = json.loads(json_out.read_text())
-    assert doc["schema_version"] == 3
+    assert doc["schema_version"] == 4
     assert doc["regime"]["light"] == "GREEN"
     assert set(doc["regime"]["signals"]) == {
         "spy_below_200dma", "breadth_below_floor", "vix_high_and_spy_falling"}
@@ -166,6 +166,51 @@ def test_market_session_from_utc():
     assert main_mod._market_session(utc(2026, 7, 3, 11, 10)) == "closed"   # pre-market
     assert main_mod._market_session(utc(2026, 7, 3, 21, 0)) == "closed"    # after close
     assert main_mod._market_session(utc(2026, 7, 4, 14, 0)) == "closed"    # Saturday
+
+
+def test_session_stamped_at_both_ends(tmp_path, monkeypatch):
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c")))
+    json_out = tmp_path / "run.json"
+    main_mod.run(_args(tmp_path, json_out=str(json_out)))
+    meta = json.loads(json_out.read_text())["meta"]
+    assert meta["market_session"] in ("regular", "closed")
+    assert meta["market_session_end"] in ("regular", "closed")
+    # Quotes fetched over the whole run are trusted only when the run both
+    # started AND finished inside regular hours.
+    assert meta["quotes_trusted"] == (
+        meta["market_session"] == "regular" and meta["market_session_end"] == "regular")
+
+
+def test_effective_premium_bases():
+    live = {"bid": 0.90, "ask": 1.10, "mid": 1.00, "quote_quality": "live"}
+    assert main_mod._effective_premium(live, "conservative") == {
+        "premium_used": 0.95, "premium_basis": "conservative"}
+    assert main_mod._effective_premium(live, "bid") == {
+        "premium_used": 0.90, "premium_basis": "bid"}
+    assert main_mod._effective_premium(live, "mid") == {
+        "premium_used": 1.00, "premium_basis": "mid"}
+    # Indicative quote (mid degraded to last trade): basis falls back to mid.
+    stale = {"bid": 0.0, "ask": 0.0, "mid": 1.05, "quote_quality": "last_price"}
+    assert main_mod._effective_premium(stale, "conservative") == {
+        "premium_used": 1.05, "premium_basis": "mid"}
+    # No quote_quality key (fixture/legacy rows) is treated as live.
+    legacy = {"bid": 0.90, "mid": 1.00}
+    assert main_mod._effective_premium(legacy, "conservative")["premium_used"] == 0.95
+
+
+def test_yields_use_conservative_premium(tmp_path, monkeypatch):
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c")))
+    json_out = tmp_path / "run.json"
+    main_mod.run(_args(tmp_path, json_out=str(json_out)))
+    row = json.loads(json_out.read_text())["rows"][0]
+    # MEGA: bid .31 / mid .32 -> conservative fill .315; ROC = 0.315/18.
+    assert row["premium_used"] == 0.315
+    assert row["premium_basis"] == "conservative"
+    assert abs(row["roc"] - 0.315 / 18.0) < 1e-9
+    assert row["pop"] == 0.80  # 1 - |delta 0.20|
+    assert row["score_mode"] == "risk_adjusted"
 
 
 def test_near_misses_captured_with_reasons(tmp_path, monkeypatch):
@@ -280,7 +325,7 @@ def test_unknown_earnings_promoted_with_flag(tmp_path, monkeypatch):
     assert rc == 0
 
     doc = json.loads(json_out.read_text())
-    assert doc["schema_version"] == 3
+    assert doc["schema_version"] == 4
     rows = {r["ticker"]: r for r in doc["rows"]}
     assert set(rows) == {"MEGA", "NOEARN"}
     assert rows["MEGA"]["data_flags"] == []

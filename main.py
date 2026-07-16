@@ -69,6 +69,18 @@ def run(args: argparse.Namespace) -> int:
         log.warning("run is outside regular US market hours — option quotes may be "
                     "stale or zeroed; snapshot will be stamped quotes_trusted=false")
 
+    def _session_meta() -> dict:
+        # Quotes are fetched over the whole run, which can take an hour on the
+        # full universe. Trust them only when BOTH endpoints of the run fall in
+        # regular hours — a run that *starts* at 19:50 UTC but finishes at
+        # 20:45 fetched most of its chains after the close.
+        session_end = _market_session()
+        return {
+            "market_session": session,
+            "market_session_end": session_end,
+            "quotes_trusted": session == "regular" and session_end == "regular",
+        }
+
     # 1. Regime check ------------------------------------------------------
     spy_hist = [h["close"] for h in provider.get_price_history("SPY", period="1y")]
     vix = provider.get_vix()
@@ -95,8 +107,7 @@ def run(args: argparse.Namespace) -> int:
                     "flags_by_reason": {},
                     "contracts_evaluated": 0,
                     "contract_gate_failures": {},
-                    "market_session": session,
-                    "quotes_trusted": session == "regular",
+                    **_session_meta(),
                 },
             )
         return 0
@@ -108,7 +119,10 @@ def run(args: argparse.Namespace) -> int:
     dte_cfg, delta_cfg, quality = config["dte"], config["delta"], config["quality"]
     earnings_policy = _resolve_earnings_policy(quality)
     require_affordable = bool(config["account"].get("require_affordable", False))
-    prefer_affordable = bool(config.get("scoring", {}).get("prefer_affordable", False))
+    scoring_cfg = config.get("scoring", {})
+    prefer_affordable = bool(scoring_cfg.get("prefer_affordable", False))
+    prefer_live_quotes = bool(scoring_cfg.get("prefer_live_quotes", True))
+    premium_basis = _resolve_premium_basis(scoring_cfg)
     scored_rows = []
     near_miss_rows = []
     rejection_counts: dict[str, int] = {}
@@ -161,6 +175,7 @@ def run(args: argparse.Namespace) -> int:
         rejections = list(put.get("rejections") or [])
         flags = list(put.get("flags") or [])
         put = {k: v for k, v in put.items() if k not in ("rejections", "flags")}
+        put.update(_effective_premium(put, premium_basis))
 
         if earnings_policy == "reject":
             for e in [f for f in flags if f["code"] == "earnings_unknown"]:
@@ -214,7 +229,8 @@ def run(args: argparse.Namespace) -> int:
                     _count_flag(e["code"])
             scored_rows.append({**scored, "data_flags": flags})
 
-    ranked = score_mod.rank(scored_rows, prefer_affordable=prefer_affordable)[: args.max_rows]
+    ranked = score_mod.rank(scored_rows, prefer_affordable=prefer_affordable,
+                            prefer_live_quotes=prefer_live_quotes)[: args.max_rows]
     near_misses = score_mod.rank(near_miss_rows)[: args.max_rows]
 
     # B1 capital sanity check — over every sized row (candidates AND near
@@ -242,8 +258,7 @@ def run(args: argparse.Namespace) -> int:
                 "flags_by_reason": flag_counts,
                 "contracts_evaluated": contracts_evaluated,
                 "contract_gate_failures": contract_gate_failures,
-                "market_session": session,
-                "quotes_trusted": session == "regular",
+                **_session_meta(),
                 "capital_warning": warn,
             },
         )
@@ -264,6 +279,41 @@ def _market_session(now: datetime | None = None) -> str:
         return "closed"
     minutes = now.hour * 60 + now.minute
     return "regular" if 13 * 60 + 30 <= minutes < 20 * 60 else "closed"
+
+
+_PREMIUM_BASES = ("conservative", "mid", "bid")
+
+
+def _resolve_premium_basis(scoring_cfg: dict) -> str:
+    basis = str(scoring_cfg.get("premium_basis", "conservative")).lower()
+    if basis not in _PREMIUM_BASES:
+        log.warning("premium_basis %r is not one of %s; falling back to conservative",
+                    basis, "|".join(_PREMIUM_BASES))
+        return "conservative"
+    return basis
+
+
+def _effective_premium(put: dict, basis: str) -> dict:
+    """The premium the yields/score are computed from (Spec: realistic fills).
+
+    The raw mid overstates what a seller actually collects when the market is
+    wide — half the spread is pure hope. With a live two-sided quote:
+
+      conservative (default)  (bid + mid) / 2 — a realistic limit-order fill
+      bid                     worst-case market-sell at the bid
+      mid                     legacy behavior
+
+    Indicative quotes (mid already degraded to last trade) keep the mid; the
+    basis actually applied is recorded as ``premium_basis``.
+    """
+    mid, bid = put.get("mid"), put.get("bid")
+    live = put.get("quote_quality", "live") == "live"
+    if live and bid is not None and bid > 0 and mid is not None:
+        if basis == "bid":
+            return {"premium_used": bid, "premium_basis": "bid"}
+        if basis == "conservative":
+            return {"premium_used": (bid + mid) / 2.0, "premium_basis": "conservative"}
+    return {"premium_used": mid, "premium_basis": "mid"}
 
 
 _EARNINGS_POLICIES = ("flag", "near_miss", "reject")
