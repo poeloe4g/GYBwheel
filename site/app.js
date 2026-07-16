@@ -186,6 +186,9 @@ function renderTable() {
     const flag = (r.breaches_per_name_cap
       ? `<span class="badge-breach" title="One contract needs more cash than your per-stock limit. You'd need an account of at least ${fmtUsd(r.min_account_for_1_contract)}.">TOO BIG</span>`
       : "") + (r.data_flags || []).map(badge("badge-flag")).join("");
+    const select = (r.max_contracts ?? 0) >= 1
+      ? `<button type="button" class="btn-select" data-rank="${r._rank}">Select</button>`
+      : `<span class="muted" title="One contract already needs more cash than your limits allow.">—</span>`;
     return `<tr>
       <td>${r.ticker ?? ""}</td>
       <td>${r.sector ?? ""}</td>
@@ -200,8 +203,18 @@ function renderTable() {
       <td class="num">${fmtNum(r.score, 3)}</td>
       <td class="num">${r.max_contracts ?? ""}</td>
       <td>${flag}</td>
+      <td>${select}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="13" class="muted">No ideas passed every safety check today. Check the near misses below to see what almost made it.</td></tr>`;
+  }).join("") || `<tr><td colspan="14" class="muted">No ideas passed every safety check today. Check the near misses below to see what almost made it.</td></tr>`;
+}
+
+function wireSelectButtons() {
+  $("#candidates tbody").addEventListener("click", (ev) => {
+    const btn = ev.target.closest(".btn-select");
+    if (!btn) return;
+    const row = tableState.rows.find((r) => r._rank === Number(btn.dataset.rank));
+    if (row && typeof GYBTrack !== "undefined") GYBTrack.openSelectModal(row);
+  });
 }
 
 function wireTableSort() {
@@ -314,6 +327,7 @@ function renderRunCharts(doc) {
 }
 
 function renderRun(doc) {
+  window.__currentRun = doc; // the select modal reads run_date/demo/spot from here
   renderRegime(doc);
   renderTopPick(doc);
   renderCards(doc);
@@ -455,6 +469,7 @@ async function loadRun(date) {
 
 async function main() {
   wireTableSort();
+  wireSelectButtons();
   let index;
   try {
     index = await fetchJson("data/index.json");
@@ -464,11 +479,13 @@ async function main() {
       "`python scripts/build_index.py`. (" + e.message + ")");
     return;
   }
+  window.__latestRunDate = index.latest; // select modal warns on older runs
   renderHistory(index);
   populatePicker(index, loadRun);
   // Outcomes exist only after the first tracked contracts expire — 404 is fine.
   fetchJson("data/outcomes.json").then(renderOutcomes).catch(() => {});
   await loadRun(index.latest);
+  if (typeof GYBTrack !== "undefined") GYBTrack.init();
 }
 
 main();

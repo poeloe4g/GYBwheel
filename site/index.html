@@ -68,6 +68,87 @@
         verify the numbers with your broker before trading.</div>
     </section>
 
+    <!-- My picks (selection tracking) -->
+    <section id="my-picks" class="hidden">
+      <h2>My picks</h2>
+      <p class="muted">Picks you select from the ideas table are tracked here. When a pick's
+        end date passes it is graded automatically: if the stock stayed above your buy-at
+        price you keep the cash; if not, the result assumes you bought the shares at the
+        expiry-day price. Open picks also count against your cash limits in the next run.</p>
+      <div id="picks-stale-note" class="notice hidden">Showing the last published copy of
+        your picks — it can lag by a day. Connect below to see and save picks instantly.</div>
+      <details class="explainer" id="picks-setup">
+        <summary id="picks-setup-summary">Connect to save your picks</summary>
+        <div class="explainer-body">
+          <p>Saving a pick from this page writes it to the project on GitHub, so it needs a
+            <strong>GitHub access key</strong> that can edit only this project. One-time setup:</p>
+          <ol>
+            <li>On GitHub: profile photo → <em>Settings</em> → <em>Developer settings</em> →
+              <em>Fine-grained personal access tokens</em> → <em>Generate new token</em>.</li>
+            <li>Under <em>Repository access</em> choose <em>Only select repositories</em> and
+              pick this project.</li>
+            <li>Under <em>Permissions → Repository permissions</em> set
+              <em>Contents</em> to <em>Read and write</em>. Generate and copy the key.</li>
+          </ol>
+          <p>Paste it below. The key stays in this browser only, and you can revoke it on
+            GitHub at any time.</p>
+          <div class="token-row">
+            <input type="password" id="token-input" placeholder="github_pat_…" autocomplete="off" />
+            <button type="button" id="token-save">Save &amp; test</button>
+            <button type="button" id="token-forget" class="hidden">Forget key</button>
+          </div>
+          <div id="token-status" class="muted"></div>
+        </div>
+      </details>
+      <div id="picks-status" class="muted"></div>
+      <section class="cards" id="picks-cards"></section>
+      <div id="picks-open-block" class="hidden">
+        <h3>Open picks</h3>
+        <div class="table-wrap">
+          <table id="picks-open">
+            <thead>
+              <tr>
+                <th>Stock</th>
+                <th class="num" title="The price you promised to buy the stock at.">Buy&nbsp;at&nbsp;$</th>
+                <th title="The date the contract ends.">Ends</th>
+                <th class="num" title="Days until the contract ends.">Days&nbsp;left</th>
+                <th class="num">Contracts</th>
+                <th class="num" title="Cash collected when you sold the put(s).">You&nbsp;got&nbsp;$</th>
+                <th class="num" title="Cash set aside in case you have to buy the shares (buy-at price × 100 × contracts).">Cash&nbsp;set&nbsp;aside&nbsp;$</th>
+                <th title="Where the stock is now versus your buy-at price, from the most recent run that screened it.">Now</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="picks-closed-block" class="hidden">
+        <h3>Finished picks</h3>
+        <div class="table-wrap">
+          <table id="picks-closed">
+            <thead>
+              <tr>
+                <th>Stock</th>
+                <th class="num" title="The price you promised to buy the stock at.">Buy&nbsp;at&nbsp;$</th>
+                <th class="num">Contracts</th>
+                <th title="When the pick ended — at expiry, or the day you closed it early.">Closed</th>
+                <th>Result</th>
+                <th class="num" title="Premium collected minus what it cost to get out (assignment loss or buyback).">Your&nbsp;P&amp;L&nbsp;$</th>
+                <th class="num" title="Your P&L as a % of the cash you had set aside.">Your&nbsp;return</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="chart-grid" style="margin-top: 1rem;">
+          <figure class="chart-card" id="chart-my-pnl-card">
+            <figcaption>Your running total: profit and loss from finished picks</figcaption>
+            <canvas id="chart-my-pnl"></canvas></figure>
+        </div>
+      </div>
+    </section>
+
     <!-- Capital summary -->
     <section class="cards" id="capital-cards"></section>
 
@@ -114,6 +195,7 @@
               <th data-key="score" class="num" title="The ranking number: yearly yield × odds of keeping the premium × cushion relative to expected volatility. Higher is better.">Score</th>
               <th data-key="max_contracts" class="num" title="How many contracts fit your account's risk limits. 0 = one contract already needs more cash than your limits allow.">Fits</th>
               <th data-key="flags">Notes</th>
+              <th title="Record this pick under 'My picks' so its result is tracked. Nothing is traded.">Select</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -204,6 +286,48 @@
     <span id="thresholds-summary"></span>
   </footer>
 
+  <!-- Select-a-pick dialog -->
+  <dialog id="select-dialog" class="modal">
+    <h3 id="sel-title"></h3>
+    <p id="sel-desc" class="muted"></p>
+    <div id="sel-warning" class="notice hidden"></div>
+    <label class="modal-label" for="sel-contracts">How many contracts?</label>
+    <div class="stepper">
+      <button type="button" id="sel-minus" aria-label="one fewer contract">−</button>
+      <input type="number" id="sel-contracts" min="1" value="1" />
+      <button type="button" id="sel-plus" aria-label="one more contract">+</button>
+      <span class="muted" id="sel-max"></span>
+    </div>
+    <div class="modal-mathline">Cash set aside: <strong id="sel-cash"></strong></div>
+    <div class="modal-mathline">You get paid: <strong id="sel-premium"></strong></div>
+    <p class="muted">This only records your pick so its result can be tracked — nothing is
+      traded, and no order is placed anywhere.</p>
+    <div id="sel-error" class="notice error hidden"></div>
+    <div class="modal-actions">
+      <button type="button" id="sel-cancel">Cancel</button>
+      <button type="button" id="sel-confirm" class="btn-primary">Save pick</button>
+    </div>
+  </dialog>
+
+  <!-- Close-early dialog -->
+  <dialog id="close-dialog" class="modal">
+    <h3 id="cls-title"></h3>
+    <p class="muted">Closing early means buying the same put back before it ends. Enter the
+      price you paid per share to buy it back (your broker shows it per share, e.g. 0.55).</p>
+    <label class="modal-label" for="cls-buyback">What did you pay to close it?</label>
+    <div class="stepper">
+      <input type="number" id="cls-buyback" min="0" step="0.01" placeholder="0.00" />
+      <span class="muted">per share</span>
+    </div>
+    <div class="modal-mathline">Your result: <strong id="cls-result"></strong></div>
+    <div id="cls-error" class="notice error hidden"></div>
+    <div class="modal-actions">
+      <button type="button" id="cls-cancel">Cancel</button>
+      <button type="button" id="cls-confirm" class="btn-primary">Record close</button>
+    </div>
+  </dialog>
+
   <script src="app.js"></script>
+  <script src="track.js"></script>
 </body>
 </html>
