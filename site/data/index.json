@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-07-15T20:44:53+00:00",
-  "latest": "2026-07-15",
+  "updated_at": "2026-07-16T18:39:12+00:00",
+  "latest": "2026-07-16",
   "runs": [
     {
       "date": "2026-06-24",
@@ -161,6 +161,16 @@
       "pct_deployed": 0.0,
       "demo": false,
       "quotes_trusted": false
+    },
+    {
+      "date": "2026-07-16",
+      "light": "GREEN",
+      "row_count": 7,
+      "near_miss_count": 25,
+      "top_score": 0.11622905365543938,
+      "pct_deployed": 0.0,
+      "demo": false,
+      "quotes_trusted": true
     }
   ]
 }
