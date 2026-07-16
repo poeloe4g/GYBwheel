@@ -1,6 +1,10 @@
 # Current open positions (B3). Copy to positions.yaml.
-# If positions.yaml is absent, the screener treats the account as greenfield
-# (no deployed capital) and says so in the report header.
+# ONLY for positions opened outside the dashboard: picks selected on the
+# dashboard live in site/data/selections.json and are counted automatically —
+# do not duplicate them here or their collateral counts double.
+# If neither positions.yaml nor open dashboard selections exist, the screener
+# treats the account as greenfield (no deployed capital) and says so in the
+# report header.
 positions:
   - ticker: KO
     sector: Consumer Staples

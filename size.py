@@ -7,6 +7,7 @@ never silently dropped: they are shown WITH ``breaches_per_name_cap = True`` and
 """
 from __future__ import annotations
 
+import json
 import logging
 import math
 from dataclasses import dataclass, field
@@ -29,23 +30,73 @@ class AccountState:
     source: str = "greenfield (no positions.yaml)"
 
 
-def load_positions(path: str | Path = "positions.yaml") -> AccountState:
-    """Load current positions. Absent file => greenfield (B3), flagged in header."""
+def _apply(state: AccountState, ticker: str, sector: str, collateral: float) -> None:
+    state.total_deployed += collateral
+    state.per_sector[sector] = state.per_sector.get(sector, 0.0) + collateral
+    state.per_ticker[ticker] = state.per_ticker.get(ticker, 0.0) + collateral
+
+
+def load_positions(
+    path: str | Path = "positions.yaml",
+    selections_path: str | Path = "site/data/selections.json",
+) -> AccountState:
+    """Load current positions. Absent file => greenfield (B3), flagged in header.
+
+    Two sources merge into one AccountState:
+      - positions.yaml — positions opened outside the dashboard (manual);
+      - site/data/selections.json — OPEN picks selected in the dashboard.
+    The same position must live in only one of them or it counts double.
+    """
+    sources: list[str] = []
+    state = AccountState()
+
+    p = Path(path)
+    if p.exists():
+        with p.open("r", encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+        for pos in data.get("positions", []) or []:
+            _apply(state, (pos.get("ticker") or "").upper(),
+                   pos.get("sector", "Unknown"), float(pos.get("collateral", 0) or 0))
+        sources.append(str(p))
+
+    n_open = _apply_open_selections(state, selections_path)
+    if n_open:
+        sources.append(f"{n_open} open selection{'s' if n_open != 1 else ''}")
+
+    if sources:
+        state.positions_loaded = True
+        state.source = " + ".join(sources)
+    return state
+
+
+def _apply_open_selections(state: AccountState, path: str | Path) -> int | None:
+    """Accumulate OPEN dashboard selections; None if no readable file.
+
+    A malformed file or entry must never fail the run — warn and skip, like
+    build_index tolerates corrupt snapshots.
+    """
     p = Path(path)
     if not p.exists():
-        return AccountState()
-    with p.open("r", encoding="utf-8") as fh:
-        data = yaml.safe_load(fh) or {}
-    positions = data.get("positions", []) or []
-    state = AccountState(positions_loaded=True, source=str(p))
-    for pos in positions:
-        coll = float(pos.get("collateral", 0) or 0)
-        state.total_deployed += coll
-        sector = pos.get("sector", "Unknown")
-        state.per_sector[sector] = state.per_sector.get(sector, 0.0) + coll
-        ticker = (pos.get("ticker") or "").upper()
-        state.per_ticker[ticker] = state.per_ticker.get(ticker, 0.0) + coll
-    return state
+        return None
+    try:
+        doc = json.loads(p.read_text(encoding="utf-8"))
+        entries = doc.get("selections") or []
+    except (json.JSONDecodeError, OSError, AttributeError) as exc:
+        log.warning("selections file %s unreadable (%s) — ignoring", p, exc)
+        return None
+    n_open = 0
+    for sel in entries:
+        if not isinstance(sel, dict) or sel.get("status") != "OPEN":
+            continue
+        try:
+            coll = float(sel["collateral"])
+            ticker = str(sel["ticker"]).upper()
+        except (KeyError, TypeError, ValueError):
+            log.warning("skipping malformed selection entry: %r", sel.get("uid", sel))
+            continue
+        _apply(state, ticker, sel.get("sector", "Unknown"), coll)
+        n_open += 1
+    return n_open
 
 
 def size_candidate(

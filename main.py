@@ -40,6 +40,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--config", default="config.yaml", help="Path to config.yaml")
     p.add_argument("--positions", default="positions.yaml", help="Path to positions.yaml (B3)")
+    p.add_argument("--selections", default="site/data/selections.json",
+                   help="Dashboard selections JSON; OPEN picks count as deployed capital")
     p.add_argument("--output", default="candidates.csv", help="CSV output path")
     p.add_argument("--json-out", help="Write a run snapshot JSON here (dashboard feed).")
     p.add_argument("--tickers", help="Comma-separated tickers to screen (overrides --tickers-file)")
@@ -88,7 +90,7 @@ def run(args: argparse.Namespace) -> int:
     breadth = provider.get_breadth(members) if members else None
     regime = regime_mod.assess(spy_hist, vix, breadth, config)
 
-    account = size_mod.load_positions(args.positions)
+    account = size_mod.load_positions(args.positions, args.selections)
 
     if regime.is_red:
         header = report_mod.build_header(regime, account, config)
