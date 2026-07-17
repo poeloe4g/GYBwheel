@@ -158,6 +158,9 @@ const GYBTrack = (() => {
 
   // ------------------------------------------------------------ select modal
   let pendingRow = null;
+  // Set while the live-data section holds a valid broker quote:
+  // { inputs: {bid, ask, spot, strike, expiration}, result: computeVerification() }
+  let pendingVerify = null;
 
   function selectedPremiumPerShare(row) {
     return row.premium_used != null ? row.premium_used : row.mid;
@@ -166,18 +169,114 @@ const GYBTrack = (() => {
   function updateSelectMath() {
     if (!pendingRow) return;
     const input = $("#sel-contracts");
+    // The screener's account-limits cap; not re-sized for an overridden strike.
     const max = Math.max(1, pendingRow.max_contracts || 1);
     let n = Math.floor(Number(input.value) || 1);
     n = Math.min(Math.max(n, 1), max);
     input.value = n;
-    $("#sel-cash").textContent = fmtUsd((pendingRow.collateral_per_contract || pendingRow.strike * 100) * n);
-    $("#sel-premium").textContent = fmtUsd((selectedPremiumPerShare(pendingRow) || 0) * 100 * n);
+    const strike = pendingVerify ? pendingVerify.inputs.strike : null;
+    const cash = pendingVerify
+      ? strike * 100 * n
+      : (pendingRow.collateral_per_contract || pendingRow.strike * 100) * n;
+    const premium = pendingVerify
+      ? pendingVerify.result.metrics.premium_used
+      : selectedPremiumPerShare(pendingRow);
+    $("#sel-cash").textContent = fmtUsd(cash);
+    $("#sel-premium").textContent = fmtUsd((premium || 0) * 100 * n);
+  }
+
+  // --------------------------------------------- live-data verification panel
+  const verifyThresholds = () => ((window.__currentRun || {}).thresholds) || {};
+  const canVerify = () =>
+    Boolean(verifyThresholds().quality) && typeof GYBVerify !== "undefined";
+
+  function resetVerifyPanel(row) {
+    const panel = $("#sel-verify");
+    pendingVerify = null;
+    panel.open = false;
+    panel.classList.toggle("hidden", !canVerify());
+    if (!canVerify()) return;
+    $("#vf-strike").value = row.strike ?? "";
+    $("#vf-expiration").value = row.expiration ?? "";
+    ["#vf-bid", "#vf-ask", "#vf-spot"].forEach((sel) => { $(sel).value = ""; });
+    $("#vf-bid").placeholder = row.bid != null ? `screener: ${fmtNum(row.bid)}` : "";
+    $("#vf-ask").placeholder = row.ask != null ? `screener: ${fmtNum(row.ask)}` : "";
+    $("#vf-spot").placeholder = row.spot != null ? `screener: ${fmtNum(row.spot)}` : "";
+    $("#vf-result").classList.add("hidden");
+  }
+
+  const GATE_ICON = { pass: "✓", fail: "✗", flag: "⚠" };
+  // Neutral checklist names — app.js's FRIENDLY_CODE labels are phrased for
+  // failures ("Premium too small") and read wrong next to a green check.
+  const GATE_LABEL = {
+    yield_30dte: "Premium size", spread: "Bid-ask spread",
+    distance: "Price cushion", implied_move: "Expected volatility",
+    delta_band: "Odds of keeping the premium",
+    open_interest: "Liquidity", oi_unknown: "Liquidity",
+    earnings: "Earnings date", earnings_unknown: "Earnings date",
+    expired: "Expiration", no_premium: "Premium",
+    crossed_quote: "Quote sanity", one_sided_quote: "Quote sanity",
+    iv_stale: "Volatility data", iv_missing: "Volatility data",
+  };
+  const gateLabel = (code) => GATE_LABEL[code] || friendly(code);
+
+  function renderVerifyResult(result, row) {
+    const box = $("#vf-result");
+    if (!result) {
+      pendingVerify = null;
+      box.classList.add("hidden");
+      updateSelectMath();
+      return;
+    }
+    box.classList.remove("hidden");
+    const verdictEl = $("#vf-verdict");
+    verdictEl.className = `verdict-pill verdict-${result.verdict}`;
+    verdictEl.textContent = result.verdict === "green" ? "Still a good pick"
+      : result.verdict === "amber" ? "OK, with caveats" : "Fails a safety check";
+    const m = result.metrics;
+    const vs = (live, screener, fmt) => `${fmt(live)} (screener: ${fmt(screener)})`;
+    $("#vf-metrics").textContent = [
+      `Premium ${vs(m.premium_used != null ? m.premium_used * 100 : null,
+        selectedPremiumPerShare(row) != null ? selectedPremiumPerShare(row) * 100 : null, fmtUsd)}`,
+      `odds of keeping it ${vs(m.pop, row._pop != null ? row._pop : row.pop, fmtPct0)}`,
+      `yearly yield ${vs(m.annualized_yield, row.annualized_yield, fmtPct)}`,
+      `score ${vs(m.score, row.score, (x) => fmtNum(x, 3))}`,
+      m.iv != null ? `IV ${fmtPct0(m.iv)} (${m.iv_source === "solved" ? "from your quote" : "screener's"})` : null,
+    ].filter(Boolean).join(" · ");
+    $("#vf-gates").innerHTML = result.gates.map((g) =>
+      `<li class="gate-${esc(g.status)}" title="${esc(g.code + ": " + g.message)}">` +
+      `${GATE_ICON[g.status] || ""} ${esc(gateLabel(g.code))} — ${esc(g.message)}</li>`).join("");
+  }
+
+  function onVerifyInput() {
+    if (!pendingRow || !canVerify()) return;
+    const inputs = {
+      bid: parseFloat($("#vf-bid").value),
+      ask: parseFloat($("#vf-ask").value),
+      spot: parseFloat($("#vf-spot").value),
+      strike: parseFloat($("#vf-strike").value),
+      expiration: $("#vf-expiration").value,
+    };
+    const complete = [inputs.bid, inputs.ask, inputs.spot, inputs.strike]
+      .every(Number.isFinite) && inputs.expiration;
+    const result = complete
+      ? GYBVerify.computeVerification(inputs, pendingRow, verifyThresholds())
+      : null;
+    pendingVerify = result ? { inputs, result } : null;
+    renderVerifyResult(result, pendingRow);
+    updateSelectMath();
+  }
+
+  function clearVerify() {
+    if (pendingRow) resetVerifyPanel(pendingRow);
+    updateSelectMath();
   }
 
   function openSelectModal(row) {
     const run = window.__currentRun || {};
     const meta = run.meta || {};
     pendingRow = row;
+    resetVerifyPanel(row);
     $("#sel-title").textContent = `Select ${row.ticker} — sell a put at ${fmtUsd(row.strike)}`;
     $("#sel-desc").textContent =
       `Ends ${row.expiration} (${row.dte} days). You collect the premium now and keep it ` +
@@ -217,37 +316,61 @@ const GYBTrack = (() => {
     const runDate = ((window.__currentRun || {}).meta || {}).run_date || "unknown";
     const n = Math.floor(Number($("#sel-contracts").value) || 1);
     const selectedAt = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
-    const key = `${runDate}|${row.ticker}|${row.expiration}|${row.strike}`;
+    // With a live verification, the entry records the contract and prices
+    // actually traded; the screener's own numbers stay under verify.*.
+    const v = pendingVerify;
+    const strike = v ? v.inputs.strike : row.strike;
+    const expiration = v ? v.inputs.expiration : row.expiration;
+    const key = `${runDate}|${row.ticker}|${expiration}|${strike}`;
     const entry = {
       uid: `${key}|${selectedAt}`,
       key,
-      symbol: row.symbol ?? null,
+      symbol: v && v.result.contract_overridden ? null : (row.symbol ?? null),
       run_date: runDate,
       ticker: row.ticker,
       sector: row.sector ?? "Unknown",
       option_type: row.option_type ?? "put",
-      strike: row.strike,
-      expiration: row.expiration,
-      dte_at_entry: row.dte ?? null,
+      strike,
+      expiration,
+      dte_at_entry: v ? v.result.metrics.dte : (row.dte ?? null),
       contracts: n,
-      entry_premium: selectedPremiumPerShare(row),
-      entry_premium_basis: row.premium_basis ?? "mid",
-      entry_bid: row.bid ?? null,
-      entry_mid: row.mid ?? null,
-      spot_at_entry: row.spot ?? null,
-      collateral: row.strike * 100 * n,
+      entry_premium: v ? v.result.metrics.premium_used : selectedPremiumPerShare(row),
+      entry_premium_basis: v ? v.result.metrics.premium_basis : (row.premium_basis ?? "mid"),
+      entry_bid: v ? v.inputs.bid : (row.bid ?? null),
+      entry_mid: v ? v.result.metrics.mid : (row.mid ?? null),
+      spot_at_entry: v ? v.inputs.spot : (row.spot ?? null),
+      collateral: strike * 100 * n,
       max_contracts_at_entry: row.max_contracts ?? null,
       selected_at: selectedAt,
       status: "OPEN",
       close: null,
     };
+    if (v) {
+      const m = v.result.metrics;
+      entry.live_verified = true;
+      entry.verify = {
+        verified_at: selectedAt,
+        bid: v.inputs.bid, ask: v.inputs.ask, spot: v.inputs.spot,
+        iv: m.iv, iv_source: m.iv_source,
+        abs_delta: m.abs_delta, implied_move: m.implied_move,
+        yield_30dte: m.yield_30dte, annualized_yield: m.annualized_yield,
+        distance_to_strike: m.distance_to_strike,
+        score: m.score, score_mode: m.score_mode,
+        screener_score: row.score ?? null,
+        verdict: v.result.verdict,
+        gates: v.result.gates,
+        contract_overridden: v.result.contract_overridden,
+        screener_contract: { strike: row.strike, expiration: row.expiration },
+      };
+    }
     const btn = $("#sel-confirm");
     btn.disabled = true;
     btn.textContent = "Saving…";
     try {
       const commit = await saveSelections(
         (doc) => doc.selections.push(entry),
-        `selection: ${row.ticker} ${fmtNum(row.strike, 0)}P x${n} (run ${runDate})`);
+        `selection: ${row.ticker} ${fmtNum(strike, 0)}P x${n} (run ${runDate})` +
+          (v ? ` (verified ${v.result.verdict})` : ""));
       $("#select-dialog").close();
       setPicksStatus(`Saved ✓ — ${row.ticker} ×${n} is now tracked under My picks` +
         (commit ? ` (commit ${commit.slice(0, 7)})` : "") + ".");
@@ -397,8 +520,11 @@ const GYBTrack = (() => {
       const act = state.writable
         ? `<button type="button" class="btn-select btn-close-early" data-uid="${esc(s.uid)}">Close early…</button>`
         : "";
+      const verified = s.live_verified && s.verify
+        ? ` <span class="badge-${s.verify.verdict === "green" ? "win" : "flag"}" title="Verified against live broker data at entry — verdict: ${esc(s.verify.verdict)}.">verified</span>`
+        : "";
       return `<tr>
-        <td>${esc(s.ticker)}</td>
+        <td>${esc(s.ticker)}${verified}</td>
         <td class="num">${fmtNum(s.strike)}</td>
         <td>${esc(s.expiration || "")}</td>
         <td class="num">${Number.isFinite(left) ? Math.max(left, 0) : "—"}</td>
@@ -461,6 +587,10 @@ const GYBTrack = (() => {
     $("#sel-contracts").addEventListener("input", updateSelectMath);
     $("#sel-cancel").addEventListener("click", () => $("#select-dialog").close());
     $("#sel-confirm").addEventListener("click", confirmSelect);
+
+    ["#vf-strike", "#vf-expiration", "#vf-bid", "#vf-ask", "#vf-spot"]
+      .forEach((sel) => $(sel).addEventListener("input", onVerifyInput));
+    $("#vf-clear").addEventListener("click", clearVerify);
 
     $("#cls-buyback").addEventListener("input", updateCloseMath);
     $("#cls-cancel").addEventListener("click", () => $("#close-dialog").close());

@@ -22,11 +22,19 @@ from build_index import build_index  # noqa: E402
 _CONFIG = {
     "dte": {"target": 35, "min": 30, "max": 45},
     "delta": {"target": 0.20, "min": 0.15, "max": 0.30},
-    "scoring": {"mode": "blended"},
+    "scoring": {"mode": "blended", "premium_basis": "conservative"},
     "regime": {"breadth_floor": 0.40, "vix_high": 30.0, "spy_falling_lookback": 5},
     "account": {"total_capital": 50000, "max_pct_per_name": 0.40,
                 "max_pct_per_sector": 0.25, "max_pct_deployed": 0.50},
-    "quality": {"avoid_earnings_before_expiry": True},
+    # Full quality block so the dashboard's "verify with live data" panel
+    # (thresholds.quality, schema v5) is exercisable on demo data.
+    "quality": {
+        "min_yield_30dte": 0.005, "max_implied_move": 0.15,
+        "max_spread_pct": 0.15, "max_spread_abs": 0.10,
+        "min_open_interest": 50, "min_distance_to_strike": 0.03,
+        "risk_free_rate": 0.04, "score_denominator_floor": 0.01,
+        "avoid_earnings_before_expiry": True,
+    },
 }
 
 

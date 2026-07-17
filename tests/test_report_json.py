@@ -50,6 +50,39 @@ def test_write_json_sanitizes_infinity(tmp_path):
     assert doc["meta"]["run_date"] == "2026-06-21"
     assert doc["meta"]["data_source"] == "yfinance"
     assert doc["thresholds"]["scoring_mode"] == "blended"
+    # v5: quality thresholds are published for client-side live verification.
+    # The fixture's near-empty quality block must yield Nones, not a KeyError.
+    q = doc["thresholds"]["quality"]
+    assert q["min_yield_30dte"] is None
+    assert q["max_spread_pct"] is None
+    assert q["risk_free_rate"] == 0.04  # defaulted, needed for BS delta in JS
+    assert doc["thresholds"]["premium_basis"] == "conservative"
+
+
+def test_write_json_publishes_quality_thresholds(tmp_path):
+    config = {
+        **_CONFIG,
+        "scoring": {"mode": "risk_adjusted", "premium_basis": "bid"},
+        "quality": {
+            "min_yield_30dte": 0.005, "max_implied_move": 0.15,
+            "max_spread_pct": 0.15, "max_spread_abs": 0.10,
+            "min_open_interest": 50, "min_distance_to_strike": 0.03,
+            "risk_free_rate": 0.05, "score_denominator_floor": 0.01,
+            "avoid_earnings_before_expiry": True,
+        },
+    }
+    out = report_mod.write_json(
+        _header(), [], _Regime(), config, tmp_path / "run.json",
+        generated_at=datetime(2026, 7, 17, 21, 5, tzinfo=timezone.utc),
+    )
+    doc = json.loads(out.read_text())
+    assert doc["thresholds"]["quality"] == {
+        "min_yield_30dte": 0.005, "max_implied_move": 0.15,
+        "max_spread_pct": 0.15, "max_spread_abs": 0.10,
+        "min_open_interest": 50, "min_distance_to_strike": 0.03,
+        "risk_free_rate": 0.05, "score_denominator_floor": 0.01,
+    }
+    assert doc["thresholds"]["premium_basis"] == "bid"
 
 
 def test_write_json_near_misses_roundtrip(tmp_path):
@@ -63,7 +96,7 @@ def test_write_json_near_misses_roundtrip(tmp_path):
         generated_at=datetime(2026, 7, 3, 19, 45, tzinfo=timezone.utc),
     )
     doc = json.loads(out.read_text())
-    assert doc["schema_version"] == 4
+    assert doc["schema_version"] == 5
     assert doc["near_misses"][0]["ticker"] == "BBB"
     assert doc["near_misses"][0]["rejection_reasons"][0]["code"] == "spread"
     assert doc["meta"]["near_miss_count"] == 1
