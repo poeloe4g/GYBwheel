@@ -112,6 +112,24 @@ The site opens with a plain-English "What is this?" guide and a "Today's top
 idea" sentence card; table headers, badges, and rejection reasons are rendered
 in lay terms (the machine codes stay in hover tooltips).
 
+- **Track (My picks):** with a fine-grained GitHub token (Contents read/write on
+  this repo only), the dashboard writes `site/data/selections.json` directly.
+  You can select ideas, see all open picks (with an "If it ended today"
+  estimate from the last screened price), close a pick early with your actual
+  buyback price, **correct a recorded close** afterwards (price or date — an ✎
+  marker shows corrected rows), and **override an auto-graded expiry** (the
+  entered settlement price re-derives kept-the-cash vs own-the-shares;
+  `close.method` becomes `manual_expiry` and the nightly grader never
+  re-touches terminal entries). Open picks count against your cash limits on
+  the next screener run.
+- **Adjust capital:** "Adjust capital…" (My picks) stores your total capital in
+  the selections file's `account` block with an append-only change history
+  (amount, timestamp, optional note — git history doubles as the audit trail).
+  The dashboard's capital cards update immediately (marked "(live)"); the
+  screener sizes with the override from its next run, falling back to
+  `config.yaml` when no override is set. Invalid values are ignored with a
+  warning — a bad override never breaks a run.
+
 `main.py --json-out PATH` writes one self-contained run snapshot (schema v4 —
 versions are additive and readers never gate on the number; the field list is
 documented in `report.py`). `scripts/build_index.py` rebuilds

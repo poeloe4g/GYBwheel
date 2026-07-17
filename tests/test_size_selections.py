@@ -91,3 +91,62 @@ def test_both_absent_is_greenfield(tmp_path):
     assert account.positions_loaded is False
     assert account.total_deployed == 0.0
     assert "greenfield" in account.source
+    assert account.total_capital_override is None
+    assert account.deployed_positions == 0.0
+
+
+def _write_doc(tmp_path, doc):
+    p = tmp_path / "selections.json"
+    p.write_text(json.dumps(doc))
+    return p
+
+
+def test_capital_override_parsed_from_account_block(tmp_path):
+    p = _write_doc(tmp_path, {
+        "schema_version": 2,
+        "account": {"total_capital": 62000,
+                    "updated_at": "2026-07-17T14:05:00Z",
+                    "history": [{"total_capital": 62000,
+                                 "changed_at": "2026-07-17T14:05:00Z",
+                                 "note": "deposit"}]},
+        "selections": [_sel()], "summary": None})
+    account = size.load_positions(tmp_path / "nope.yaml", p)
+    assert account.total_capital_override == 62000.0
+    assert account.positions_loaded is True
+    assert account.source == "1 open selection + capital override $62,000"
+
+
+def test_capital_override_alone_counts_as_loaded(tmp_path):
+    p = _write_doc(tmp_path, {"schema_version": 2,
+                              "account": {"total_capital": 30000},
+                              "selections": [], "summary": None})
+    account = size.load_positions(tmp_path / "nope.yaml", p)
+    assert account.total_capital_override == 30000.0
+    assert account.positions_loaded is True
+    assert account.source == "capital override $30,000"
+
+
+def test_capital_override_absent_is_none(tmp_path):
+    sel_path = _write_selections(tmp_path, _sel())
+    account = size.load_positions(tmp_path / "nope.yaml", sel_path)
+    assert account.total_capital_override is None
+
+
+def test_capital_override_invalid_values_ignored(tmp_path):
+    # A bad override must never fail or distort the run — warn and fall back.
+    for bad in ("oops", -5000, 0, None, [50000]):
+        p = _write_doc(tmp_path, {"schema_version": 2,
+                                  "account": {"total_capital": bad},
+                                  "selections": [_sel()], "summary": None})
+        account = size.load_positions(tmp_path / "nope.yaml", p)
+        assert account.total_capital_override is None, bad
+        assert account.total_deployed == 12500.0  # selections still counted
+        assert account.source == "1 open selection"
+
+
+def test_deployed_positions_split(tmp_path):
+    yaml_path = _write_yaml(tmp_path)                       # 6000 from yaml
+    sel_path = _write_selections(tmp_path, _sel())          # 12500 OPEN pick
+    account = size.load_positions(yaml_path, sel_path)
+    assert account.deployed_positions == 6000.0
+    assert account.total_deployed == 18500.0

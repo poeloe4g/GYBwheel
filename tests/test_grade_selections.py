@@ -163,6 +163,40 @@ def test_live_verified_entries_grade_alongside_old_shape(tmp_path):
     assert doc["summary"]["closed"]["n"] == 2
 
 
+def test_account_block_and_manual_edits_survive_grading(tmp_path):
+    """The dashboard's capital block and manually corrected closes round-trip
+    through grading untouched (terminal entries are never re-examined)."""
+    account = {"total_capital": 62000, "updated_at": "2026-07-17T14:05:00Z",
+               "history": [{"total_capital": 62000,
+                            "changed_at": "2026-07-17T14:05:00Z", "note": "deposit"}]}
+    manual = _sel(ticker="MANUAL", status="ASSIGNED",
+                  close={"method": "manual_expiry", "closed_at": "2026-08-07",
+                         "expiry_close": 88.0, "pnl_usd": -580.0,
+                         "realized_roc": -0.031522, "annualized_realized": -0.348674,
+                         "win": False, "edited_at": "2026-08-09T10:00:00Z"})
+    edited_early = _sel(ticker="EDITED", status="EARLY_CLOSED",
+                        close={"method": "early_close", "closed_at": "2026-07-20",
+                               "buyback_price": 0.42, "pnl_usd": 136.0,
+                               "realized_roc": 0.00739, "annualized_realized": 0.1799,
+                               "win": True, "edited_at": "2026-08-01T10:00:00Z"})
+    p = tmp_path / "selections.json"
+    p.write_text(json.dumps({"schema_version": 2, "updated_at": None,
+                             "account": account,
+                             "selections": [manual, edited_early, _sel()],
+                             "summary": None}))
+    provider = FakeProvider({"WINNER": WIN_HIST})
+    doc = gs.grade_file(p, provider, today=date(2026, 8, 10))
+
+    assert doc["account"] == account            # capital block round-trips
+    assert doc["selections"][0] == manual       # manual override never re-graded
+    assert doc["selections"][1] == edited_early
+    assert provider.calls == ["WINNER"]         # terminal tickers never fetched
+    assert doc["selections"][2]["status"] == "EXPIRED_WIN"
+    assert doc["summary"]["closed"]["n"] == 3
+    # And the block survives a rewrite on disk, not just in the return value.
+    assert json.loads(p.read_text())["account"] == account
+
+
 def test_main_cli_with_injected_provider(tmp_path, capsys):
     path = _write(tmp_path, _sel())
     rc = gs.main(["--selections", str(path), "--today", "2026-08-10"],

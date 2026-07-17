@@ -5,6 +5,7 @@ from pathlib import Path
 
 from cache import DiskCache
 import main as main_mod
+import report
 
 
 class FakeProvider:
@@ -119,7 +120,7 @@ def test_red_regime_short_circuits(tmp_path, monkeypatch, capsys):
     assert not (tmp_path / "out.csv").exists()  # stopped before writing
     # RED days still appear on the dashboard timeline, with no candidates.
     doc = json.loads(json_out.read_text())
-    assert doc["schema_version"] == 5
+    assert doc["schema_version"] == report.SCHEMA_VERSION
     assert doc["regime"]["light"] == "RED"
     assert doc["rows"] == []
     assert doc["near_misses"] == []
@@ -143,7 +144,7 @@ def test_green_end_to_end_writes_csv(tmp_path, monkeypatch, capsys):
 
     # JSON snapshot mirrors the run for the dashboard.
     doc = json.loads(json_out.read_text())
-    assert doc["schema_version"] == 5
+    assert doc["schema_version"] == report.SCHEMA_VERSION
     assert doc["regime"]["light"] == "GREEN"
     assert set(doc["regime"]["signals"]) == {
         "spy_below_200dma", "breadth_below_floor", "vix_high_and_spy_falling"}
@@ -157,6 +158,36 @@ def test_green_end_to_end_writes_csv(tmp_path, monkeypatch, capsys):
     assert doc["meta"]["market_session"] in ("regular", "closed")
     assert doc["meta"]["quotes_trusted"] == (doc["meta"]["market_session"] == "regular")
     assert doc["meta"]["capital_warning"] is None  # strike 18 fits the $2.5k cap
+
+
+def test_capital_override_flows_through_run(tmp_path, monkeypatch, capsys):
+    """A dashboard-set account.total_capital in selections.json overrides
+    config.yaml for sizing, the header, and the published thresholds."""
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c"), falling=False))
+    sel_path = tmp_path / "selections.json"
+    sel_path.write_text(json.dumps({
+        "schema_version": 2,
+        "account": {"total_capital": 4000, "updated_at": "2026-07-17T14:05:00Z"},
+        "selections": [], "summary": None}))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, json_out=str(json_out),
+                            selections=str(sel_path)))
+    assert rc == 0
+    assert "Capital $4,000" in capsys.readouterr().out
+    doc = json.loads(json_out.read_text())
+    assert doc["header"]["total_capital"] == 4000
+    assert doc["header"]["capital_source"] == "dashboard"
+    assert doc["header"]["deployed_positions"] == 0.0
+    assert doc["header"]["deployed_selections"] == 0.0
+    assert "capital override $4,000" in doc["header"]["positions_source"]
+    # Published caps (client-side verify math) also scale off the override.
+    assert doc["thresholds"]["account"]["total_capital"] == 4000
+    # Sizing used the override: per-name cap = 40% of $4k = $1,600 < $1,800
+    # collateral, so MEGA's strike-18 put breaches the per-name cap.
+    row = doc["rows"][0]
+    assert row["breaches_per_name_cap"] is True
+    assert row["max_contracts"] == 0
 
 
 def test_market_session_from_utc():
@@ -326,7 +357,7 @@ def test_unknown_earnings_promoted_with_flag(tmp_path, monkeypatch):
     assert rc == 0
 
     doc = json.loads(json_out.read_text())
-    assert doc["schema_version"] == 5
+    assert doc["schema_version"] == report.SCHEMA_VERSION
     rows = {r["ticker"]: r for r in doc["rows"]}
     assert set(rows) == {"MEGA", "NOEARN"}
     assert rows["MEGA"]["data_flags"] == []

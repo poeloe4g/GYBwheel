@@ -154,10 +154,35 @@ function renderCards(doc) {
   const nearMissCount = (doc.near_misses || []).length;
   const candidates = String(rows.length) +
     (nearMissCount ? ` (+${nearMissCount} near miss${nearMissCount > 1 ? "es" : ""})` : "");
+  // Live capital state published by track.js (updateCapitalCards): the
+  // header's numbers were baked in at run time and go stale the moment
+  // capital or picks change on the dashboard. Prefer the live view; the
+  // deployed split (v6 headers) avoids double-counting the OPEN picks
+  // already baked into this snapshot.
+  const live = window.GYBCapital || null;
+  let total = h.total_capital;
+  let deployed = h.deployed;
+  let isLive = false;
+  if (live) {
+    if (live.total_capital != null && live.total_capital !== total) {
+      total = live.total_capital;
+      isLive = true;
+    }
+    if (h.deployed_positions != null) {
+      const d = h.deployed_positions + live.open_collateral;
+      if (d !== deployed) isLive = true;
+      deployed = d;
+    }
+  }
+  const pctDeployed = total ? deployed / total : 0;
+  const remaining = total != null ? total - deployed : h.remaining_cash;
+  const liveMark = isLive
+    ? ` <span class="muted" title="Recomputed from your current picks file — the last run's snapshot is out of date.">(live)</span>`
+    : "";
   const cards = [
-    ["Account size", fmtUsd(h.total_capital)],
-    ["Cash already committed", `${fmtUsd(h.deployed)} (${fmtPct(h.pct_deployed)})`],
-    ["Cash available", fmtUsd(h.remaining_cash)],
+    ["Account size", fmtUsd(total) + liveMark],
+    ["Cash already committed", `${fmtUsd(deployed)} (${fmtPct(pctDeployed)})${liveMark}`],
+    ["Cash available", fmtUsd(remaining) + liveMark],
     ["Ideas today", candidates],
     ["Your positions", h.positions_source && h.positions_source.startsWith("greenfield")
       ? "none loaded" : (h.positions_source || "—")],

@@ -124,7 +124,12 @@ tbody tr:hover { background: var(--panel-2); }
   padding: 0.25rem 0.6rem; font-size: 0.78rem; font-weight: 600; cursor: pointer;
 }
 .btn-select:hover { filter: brightness(1.15); }
-.btn-close-early { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+.btn-close-early, .btn-edit-close { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+
+.picks-actions { margin: 0.35rem 0 0.6rem; }
+#cap-input { width: 9rem; }
+#cap-note { width: 100%; max-width: 300px; text-align: left; }
+#ecl-date { width: auto; }
 
 h3 { font-size: 0.95rem; margin: 1.1rem 0 0.5rem; }
 
