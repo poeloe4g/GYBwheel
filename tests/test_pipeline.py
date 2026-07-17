@@ -100,6 +100,7 @@ class FakeProvider:
 
 def _args(tmp_path, **over):
     base = dict(config="config.yaml", positions=str(tmp_path / "none.yaml"),
+                selections=str(tmp_path / "none.json"),
                 output=str(tmp_path / "out.csv"), json_out=None, tickers="MEGA",
                 sp500_file=None, max_rows=25, paper=True, verbose=False)
     base.update(over)

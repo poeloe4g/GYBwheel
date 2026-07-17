@@ -81,6 +81,12 @@ jobs:
         continue-on-error: true
         run: python scripts/evaluate_outcomes.py --runs site/data/runs --out site/data/outcomes.json
 
+      # Settle the user's dashboard picks whose contracts have expired
+      # (EXPIRED_WIN / ASSIGNED). Idempotent; same isolation as above.
+      - name: Grade user selections at expiry
+        continue-on-error: true
+        run: python scripts/grade_selections.py --selections site/data/selections.json
+
       # Only reached if the screener exited 0 — keeps the last good latest.json.
       - name: Rebuild dashboard index + latest
         run: python scripts/build_index.py --data-dir site/data
@@ -106,10 +112,25 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add site/data/runs/"${RUN_DATE}".json site/data/index.json site/data/latest.json
           [ -f site/data/outcomes.json ] && git add site/data/outcomes.json || true
+          [ -f site/data/selections.json ] && git add site/data/selections.json || true
           if git diff --cached --quiet; then
             echo "No data changes to commit."
           else
             git commit -m "data: screener run ${RUN_DATE}"
+            # The checkout happened up to an hour ago; a dashboard selection
+            # pushed meanwhile makes a plain push non-fast-forward. Rebase on
+            # top — the two writers touch disjoint files in the normal case.
+            # The one real conflict is selections.json itself (a pick made
+            # mid-run while the grader rewrote the file): take the remote
+            # version so the new pick survives, re-run the idempotent grader
+            # on it, and continue. Any other conflict fails the step and
+            # trips the existing workflow-failure alert.
+            if ! git pull --rebase origin main; then
+              git checkout --ours site/data/selections.json
+              python scripts/grade_selections.py --selections site/data/selections.json || true
+              git add site/data/selections.json
+              GIT_EDITOR=true git rebase --continue
+            fi
             git push
           fi
 
