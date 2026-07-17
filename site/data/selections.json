@@ -1,6 +1,21 @@
 {
   "schema_version": 1,
-  "updated_at": null,
+  "updated_at": "2026-07-17T18:33:40+00:00",
   "selections": [],
-  "summary": null
+  "summary": {
+    "open": {
+      "n": 0,
+      "collateral": 0,
+      "premium_at_risk_usd": 0
+    },
+    "closed": {
+      "n": 0,
+      "wins": 0,
+      "win_rate": null,
+      "total_pnl_usd": 0,
+      "total_premium_collected_usd": 0,
+      "avg_realized_roc": null
+    },
+    "equity_curve": []
+  }
 }
