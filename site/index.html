@@ -149,7 +149,7 @@
         <div class="chart-grid" style="margin-top: 1rem;">
           <figure class="chart-card" id="chart-my-pnl-card">
             <figcaption>Your running total: profit and loss from finished picks</figcaption>
-            <canvas id="chart-my-pnl"></canvas></figure>
+            <div class="canvas-wrap"><canvas id="chart-my-pnl"></canvas></div></figure>
         </div>
       </div>
     </section>
@@ -163,19 +163,21 @@
       <select id="run-picker"></select>
     </section>
 
+    <!-- Headline numbers for the selected run -->
+    <div class="section-eyebrow">Today's analysis</div>
+    <section class="cards kpi-cards" id="kpi-cards"></section>
+
     <!-- Per-run charts -->
     <section class="chart-grid">
       <figure class="chart-card"><figcaption>Best ideas by score (higher = better premium for the risk)</figcaption>
-        <canvas id="chart-top-score"></canvas></figure>
+        <div class="canvas-wrap"><canvas id="chart-top-score"></canvas></div></figure>
       <figure class="chart-card"><figcaption>Yearly yield vs. safety cushion (bigger bubble = more contracts fit your account)</figcaption>
-        <canvas id="chart-yield-distance"></canvas></figure>
+        <div class="canvas-wrap"><canvas id="chart-yield-distance"></canvas></div></figure>
       <figure class="chart-card"><figcaption>Where the money would go, by sector</figcaption>
-        <canvas id="chart-sector"></canvas></figure>
-      <figure class="chart-card"><figcaption>How much of your cash is committed</figcaption>
-        <canvas id="chart-deployed"></canvas></figure>
+        <div class="canvas-wrap"><canvas id="chart-sector"></canvas></div></figure>
       <figure class="chart-card hidden" id="chart-rejections-card">
         <figcaption>Why ideas were excluded today</figcaption>
-        <canvas id="chart-rejections"></canvas></figure>
+        <div class="canvas-wrap"><canvas id="chart-rejections"></canvas></div></figure>
     </section>
 
     <!-- Candidates table -->
@@ -248,7 +250,7 @@
       <div class="chart-grid">
         <figure class="chart-card hidden" id="chart-outcome-winrate-card">
           <figcaption>Win rate of excluded ideas, by exclusion reason</figcaption>
-          <canvas id="chart-outcome-winrate"></canvas></figure>
+          <div class="canvas-wrap"><canvas id="chart-outcome-winrate"></canvas></div></figure>
       </div>
       <div class="table-wrap">
         <table id="outcomes">
@@ -276,13 +278,19 @@
       <p class="muted">How the screener's output has evolved run by run.</p>
       <div class="chart-grid">
         <figure class="chart-card"><figcaption>Market traffic light over time</figcaption>
-          <canvas id="hist-regime"></canvas></figure>
+          <div id="hist-regime" class="status-strip"></div>
+          <div id="hist-regime-axis" class="status-strip-axis"></div>
+          <div class="status-strip-legend">
+            <span><i style="background:var(--green)"></i>Calm</span>
+            <span><i style="background:var(--yellow)"></i>Caution</span>
+            <span><i style="background:var(--red)"></i>Stress</span>
+          </div></figure>
         <figure class="chart-card"><figcaption>Best available score over time</figcaption>
-          <canvas id="hist-top-score"></canvas></figure>
+          <div class="canvas-wrap"><canvas id="hist-top-score"></canvas></div></figure>
         <figure class="chart-card"><figcaption>Ideas found per run (solid) vs. near misses (dashed)</figcaption>
-          <canvas id="hist-count"></canvas></figure>
+          <div class="canvas-wrap"><canvas id="hist-count"></canvas></div></figure>
         <figure class="chart-card"><figcaption>% of cash committed over time</figcaption>
-          <canvas id="hist-deployed"></canvas></figure>
+          <div class="canvas-wrap"><canvas id="hist-deployed"></canvas></div></figure>
       </div>
     </section>
   </main>
