@@ -37,7 +37,13 @@ from typing import Any
 #       ``score_denominator_floor``) and ``thresholds.premium_basis``, so the
 #       dashboard can re-run the quality gates client-side against live broker
 #       quotes without hardcoding any threshold.
-SCHEMA_VERSION = 5
+#   v6: header carries ``capital_source`` ("dashboard" when the selections
+#       file's ``account.total_capital`` override was applied, else
+#       "config.yaml") and the deployed split ``deployed_positions`` /
+#       ``deployed_selections``, so the dashboard can recompute cash available
+#       from the live selections file without double-counting the OPEN picks
+#       baked into this snapshot.
+SCHEMA_VERSION = 6
 
 CSV_COLUMNS = [
     "ticker", "sector", "expiration", "dte", "strike", "mid", "premium_used",
@@ -55,11 +61,17 @@ def _flag_codes(row: dict[str, Any]) -> str:
 def build_header(regime: Any, account: Any, config: dict[str, Any]) -> dict[str, Any]:
     total_capital = float(config["account"]["total_capital"])
     deployed = account.total_deployed
+    deployed_positions = float(getattr(account, "deployed_positions", 0.0) or 0.0)
     return {
         "regime_light": regime.light,
         "regime_tripped": regime.tripped,
         "total_capital": total_capital,
+        "capital_source": ("dashboard"
+                           if getattr(account, "total_capital_override", None) is not None
+                           else "config.yaml"),
         "deployed": deployed,
+        "deployed_positions": deployed_positions,
+        "deployed_selections": deployed - deployed_positions,
         "pct_deployed": (deployed / total_capital) if total_capital else 0.0,
         "remaining_cash": total_capital - deployed,
         "positions_source": account.source,

@@ -34,6 +34,32 @@ def _header(pct=0.0):
             "positions_source": "greenfield (no positions.yaml)"}
 
 
+class _Account:
+    """Minimal size.AccountState stand-in."""
+    def __init__(self, deployed=0.0, deployed_positions=0.0, override=None):
+        self.total_deployed = deployed
+        self.deployed_positions = deployed_positions
+        self.total_capital_override = override
+        self.source = "positions.yaml + 1 open selection"
+
+
+def test_build_header_capital_source_and_deployed_split():
+    # main.py applies the override to the config before build_header runs.
+    config = {"account": {"total_capital": 62000}}
+    h = report_mod.build_header(
+        _Regime(), _Account(deployed=18500.0, deployed_positions=6000.0,
+                            override=62000.0), config)
+    assert h["total_capital"] == 62000.0
+    assert h["capital_source"] == "dashboard"
+    assert h["deployed_positions"] == 6000.0
+    assert h["deployed_selections"] == 12500.0
+    assert h["remaining_cash"] == 43500.0
+
+    h2 = report_mod.build_header(
+        _Regime(), _Account(deployed=18500.0, deployed_positions=6000.0), config)
+    assert h2["capital_source"] == "config.yaml"
+
+
 def test_write_json_sanitizes_infinity(tmp_path):
     rows = [{"ticker": "AAA", "score": 2.27, "min_account_for_1_contract": math.inf,
              "annualized_yield": 0.18}]
@@ -96,7 +122,7 @@ def test_write_json_near_misses_roundtrip(tmp_path):
         generated_at=datetime(2026, 7, 3, 19, 45, tzinfo=timezone.utc),
     )
     doc = json.loads(out.read_text())
-    assert doc["schema_version"] == 5
+    assert doc["schema_version"] == report_mod.SCHEMA_VERSION
     assert doc["near_misses"][0]["ticker"] == "BBB"
     assert doc["near_misses"][0]["rejection_reasons"][0]["code"] == "spread"
     assert doc["meta"]["near_miss_count"] == 1

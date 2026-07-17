@@ -101,6 +101,9 @@
         </div>
       </details>
       <div id="picks-status" class="muted"></div>
+      <div class="picks-actions">
+        <button type="button" id="btn-adjust-capital" class="btn-select hidden">Adjust capital…</button>
+      </div>
       <section class="cards" id="picks-cards"></section>
       <div id="picks-open-block" class="hidden">
         <h3>Open picks</h3>
@@ -116,6 +119,7 @@
                 <th class="num" title="Cash collected when you sold the put(s).">You&nbsp;got&nbsp;$</th>
                 <th class="num" title="Cash set aside in case you have to buy the shares (buy-at price × 100 × contracts).">Cash&nbsp;set&nbsp;aside&nbsp;$</th>
                 <th title="Where the stock is now versus your buy-at price, from the most recent run that screened it.">Now</th>
+                <th class="num" title="Estimated result if the contract settled at the stock price from the most recent run — your broker's live buyback quote will differ.">If&nbsp;it&nbsp;ended&nbsp;today&nbsp;$</th>
                 <th></th>
               </tr>
             </thead>
@@ -136,6 +140,7 @@
                 <th>Result</th>
                 <th class="num" title="Premium collected minus what it cost to get out (assignment loss or buyback).">Your&nbsp;P&amp;L&nbsp;$</th>
                 <th class="num" title="Your P&L as a % of the cash you had set aside.">Your&nbsp;return</th>
+                <th></th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -355,6 +360,50 @@
     <div class="modal-actions">
       <button type="button" id="cls-cancel">Cancel</button>
       <button type="button" id="cls-confirm" class="btn-primary">Record close</button>
+    </div>
+  </dialog>
+
+  <!-- Adjust-capital dialog -->
+  <dialog id="capital-dialog" class="modal">
+    <h3>Adjust total capital</h3>
+    <p class="muted">The total cash your account has to work with. The cards above update
+      immediately; the screener sizes new ideas with this from its next run.</p>
+    <div class="modal-mathline">Current: <strong id="cap-current"></strong></div>
+    <label class="modal-label" for="cap-input">New total capital $</label>
+    <div class="stepper">
+      <input type="number" id="cap-input" min="1" step="100" />
+    </div>
+    <label class="modal-label" for="cap-note">Note (optional — e.g. "deposit", "withdrawal")</label>
+    <div class="stepper">
+      <input type="text" id="cap-note" maxlength="80" placeholder="why it changed" />
+    </div>
+    <p class="muted">Every change is kept in a history inside your picks file, so you can
+      always see when and why your capital changed.</p>
+    <div id="cap-error" class="notice error hidden"></div>
+    <div class="modal-actions">
+      <button type="button" id="cap-cancel">Cancel</button>
+      <button type="button" id="cap-confirm" class="btn-primary">Save</button>
+    </div>
+  </dialog>
+
+  <!-- Correct-a-recorded-close dialog -->
+  <dialog id="edit-close-dialog" class="modal">
+    <h3 id="ecl-title"></h3>
+    <p id="ecl-desc" class="muted"></p>
+    <label class="modal-label" for="ecl-date">Close date</label>
+    <div class="stepper">
+      <input type="date" id="ecl-date" />
+    </div>
+    <label class="modal-label" for="ecl-price" id="ecl-price-label"></label>
+    <div class="stepper">
+      <input type="number" id="ecl-price" min="0" step="0.01" placeholder="0.00" />
+      <span class="muted">per share</span>
+    </div>
+    <div class="modal-mathline">New result: <strong id="ecl-result"></strong></div>
+    <div id="ecl-error" class="notice error hidden"></div>
+    <div class="modal-actions">
+      <button type="button" id="ecl-cancel">Cancel</button>
+      <button type="button" id="ecl-confirm" class="btn-primary">Save correction</button>
     </div>
   </dialog>
 

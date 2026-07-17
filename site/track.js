@@ -385,6 +385,52 @@ const GYBTrack = (() => {
     }
   }
 
+  // ------------------------------------------------- close math (shared)
+  // Rounding note: JS Math.round(x*1e2)/1e2 and Python round(x, 2) can differ
+  // by a sub-cent on exact half-cents (Python banker's rounding). Cosmetic,
+  // and only on manually recorded/edited rows — accepted.
+
+  // Early close: you bought the put back at `buyback` per share.
+  function buildEarlyClose(sel, buyback, closedAt) {
+    const pnl = (sel.entry_premium - buyback) * 100 * sel.contracts;
+    const roc = sel.collateral ? pnl / sel.collateral : 0;
+    const heldDays = Math.max(1, Math.round(
+      (Date.parse(closedAt) - Date.parse((sel.selected_at || "").slice(0, 10) || closedAt)) / 86400e3));
+    return {
+      method: "early_close",
+      closed_at: closedAt,
+      buyback_price: buyback,
+      pnl_usd: Math.round(pnl * 100) / 100,
+      realized_roc: Math.round(roc * 1e6) / 1e6,
+      annualized_realized: Math.round((roc * 365 / heldDays) * 1e6) / 1e6,
+      win: pnl >= 0,
+    };
+  }
+
+  // Manual expiry settlement: same math as scripts/grade_selections.py
+  // grade_selection / evaluate_outcomes.evaluate_contract — loss marked at the
+  // (user-entered) expiry-day stock price. Keep the two in sync.
+  function buildExpiryClose(sel, expiryClose, closedAt) {
+    const loss = Math.max(sel.strike - expiryClose, 0);
+    const perShare = sel.entry_premium - loss;
+    const pnl = perShare * 100 * sel.contracts;
+    const roc = sel.strike ? perShare / sel.strike : 0;
+    const selectedDate = (sel.selected_at || sel.run_date || "").slice(0, 10) || closedAt;
+    const heldDays = Math.max(1, Math.round(
+      (Date.parse(closedAt) - Date.parse(selectedDate)) / 86400e3));
+    return {
+      method: "manual_expiry",
+      closed_at: closedAt,
+      expiry_close: expiryClose,
+      pnl_usd: Math.round(pnl * 100) / 100,
+      realized_roc: Math.round(roc * 1e6) / 1e6,
+      annualized_realized: Math.round((roc * 365 / heldDays) * 1e6) / 1e6,
+      win: expiryClose > sel.strike,
+    };
+  }
+
+  const isExpiryMethod = (m) => m === "expiry" || m === "manual_expiry";
+
   // ------------------------------------------------------- early-close modal
   let pendingClose = null;
 
@@ -422,19 +468,7 @@ const GYBTrack = (() => {
       return;
     }
     const today = new Date().toISOString().slice(0, 10);
-    const pnl = (sel.entry_premium - buyback) * 100 * sel.contracts;
-    const roc = sel.collateral ? pnl / sel.collateral : 0;
-    const heldDays = Math.max(1, Math.round(
-      (Date.parse(today) - Date.parse((sel.selected_at || "").slice(0, 10) || today)) / 86400e3));
-    const close = {
-      method: "early_close",
-      closed_at: today,
-      buyback_price: buyback,
-      pnl_usd: Math.round(pnl * 100) / 100,
-      realized_roc: Math.round(roc * 1e6) / 1e6,
-      annualized_realized: Math.round((roc * 365 / heldDays) * 1e6) / 1e6,
-      win: pnl >= 0,
-    };
+    const close = buildEarlyClose(sel, buyback, today);
     const btn = $("#cls-confirm");
     btn.disabled = true;
     btn.textContent = "Saving…";
@@ -456,6 +490,166 @@ const GYBTrack = (() => {
     } finally {
       btn.disabled = false;
       btn.textContent = "Record close";
+    }
+  }
+
+  // ------------------------------------------------- correct-a-close modal
+  let pendingEdit = null;
+
+  function editedClose(sel) {
+    const price = Number($("#ecl-price").value);
+    if ($("#ecl-price").value === "" || Number.isNaN(price) || price < 0) return null;
+    const closedAt = $("#ecl-date").value ||
+      ((sel.close || {}).closed_at || "").slice(0, 10) ||
+      new Date().toISOString().slice(0, 10);
+    return isExpiryMethod((sel.close || {}).method)
+      ? buildExpiryClose(sel, price, closedAt)
+      : buildEarlyClose(sel, price, closedAt);
+  }
+
+  function updateEditCloseMath() {
+    if (!pendingEdit) return;
+    const el = $("#ecl-result");
+    const close = editedClose(pendingEdit);
+    if (!close) { el.textContent = "—"; el.style.color = ""; return; }
+    let text = `${close.pnl_usd >= 0 ? "+" : "−"}${fmtUsd(Math.abs(close.pnl_usd))}`;
+    if (isExpiryMethod((pendingEdit.close || {}).method)) {
+      text += close.win ? " — kept the cash" : " — own the shares";
+    }
+    el.textContent = text;
+    el.style.color = close.pnl_usd >= 0 ? COLORS.green : COLORS.red;
+  }
+
+  function openEditCloseModal(sel) {
+    pendingEdit = sel;
+    const c = sel.close || {};
+    const expiry = isExpiryMethod(c.method);
+    $("#ecl-title").textContent =
+      `Correct ${sel.ticker} ${fmtUsd(sel.strike)} (${sel.contracts} contract${sel.contracts > 1 ? "s" : ""})`;
+    $("#ecl-desc").textContent = expiry
+      ? "This pick was settled at expiry. Correct the stock's closing price on the end " +
+        "date — whether you kept the cash or own the shares follows from it automatically."
+      : "This pick was closed early. Correct the per-share price you paid to buy the put " +
+        "back, or the close date.";
+    $("#ecl-price-label").textContent = expiry
+      ? "Stock price at expiry"
+      : "What did you pay to close it?";
+    $("#ecl-date").value = String(c.closed_at || "").slice(0, 10);
+    $("#ecl-price").value = expiry ? (c.expiry_close ?? "") : (c.buyback_price ?? "");
+    $("#ecl-error").classList.add("hidden");
+    updateEditCloseMath();
+    $("#edit-close-dialog").showModal();
+  }
+
+  async function confirmEditClose() {
+    if (!pendingEdit) return;
+    const sel = pendingEdit;
+    const close = editedClose(sel);
+    const errEl = $("#ecl-error");
+    if (!close) {
+      errEl.textContent = isExpiryMethod((sel.close || {}).method)
+        ? "Enter the stock's closing price on the end date (0 or more)."
+        : "Enter the per-share price you paid to buy the put back (0 or more).";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    close.edited_at = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+    // Early closes stay EARLY_CLOSED; a corrected expiry settlement re-derives
+    // the outcome. Terminal statuses are never re-graded by the server, so a
+    // manual correction sticks.
+    const status = isExpiryMethod((sel.close || {}).method)
+      ? (close.win ? "EXPIRED_WIN" : "ASSIGNED")
+      : "EARLY_CLOSED";
+    const btn = $("#ecl-confirm");
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    try {
+      const commit = await saveSelections((doc) => {
+        const target = (doc.selections || []).find((s) => s.uid === sel.uid);
+        if (!target) throw new Error("this pick is no longer in the file");
+        if (target.status === "OPEN" || !target.close) throw new Error("this pick isn't closed");
+        target.status = status;
+        target.close = close;
+      }, `selection: correct close ${sel.ticker} ${fmtNum(sel.strike, 0)}P @${close.expiry_close ?? close.buyback_price}`);
+      $("#edit-close-dialog").close();
+      setPicksStatus(`Corrected ✓ — ${sel.ticker} close updated` +
+        (commit ? ` (commit ${commit.slice(0, 7)})` : "") + ".");
+    } catch (e) {
+      errEl.textContent = `Could not save: ${e.message} — nothing was changed.`;
+      errEl.classList.remove("hidden");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Save correction";
+    }
+  }
+
+  // --------------------------------------------------- adjust-capital modal
+  // Dashboard-set total capital (selections doc ``account`` block). The
+  // screener picks it up on its next run (size.load_positions); until then
+  // the capital cards are recomputed live via updateCapitalCards().
+  function effectiveCapital() {
+    const acct = (state.doc || {}).account;
+    if (!acct || typeof acct !== "object") return null;
+    const v = Number(acct.total_capital);
+    return Number.isFinite(v) && v > 0 ? v : null;
+  }
+
+  function updateCapitalCards() {
+    if (!state.doc) return;
+    const openCollateral = ((state.doc || {}).selections || [])
+      .filter((s) => s && s.status === "OPEN")
+      .reduce((t, s) => t + (Number(s.collateral) || 0), 0);
+    window.GYBCapital = { total_capital: effectiveCapital(), open_collateral: openCollateral };
+    if (window.__currentRun && typeof renderCards === "function") {
+      renderCards(window.__currentRun);
+    }
+  }
+
+  function openCapitalModal() {
+    const acct = (state.doc || {}).account || {};
+    const override = effectiveCapital();
+    const snapshotTotal = (((window.__currentRun || {}).header) || {}).total_capital;
+    $("#cap-current").textContent = override != null
+      ? `${fmtUsd(override)} (set ${String(acct.updated_at || "").slice(0, 10) || "earlier"})`
+      : `${fmtUsd(snapshotTotal)} (screener default)`;
+    $("#cap-input").value = override ?? snapshotTotal ?? "";
+    $("#cap-note").value = "";
+    $("#cap-error").classList.add("hidden");
+    $("#capital-dialog").showModal();
+  }
+
+  async function confirmCapital() {
+    const v = Number($("#cap-input").value);
+    const errEl = $("#cap-error");
+    if (!Number.isFinite(v) || v <= 0) {
+      errEl.textContent = "Enter your total capital as a number above 0.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    const note = $("#cap-note").value.trim();
+    const now = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+    const btn = $("#cap-confirm");
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    try {
+      const commit = await saveSelections((doc) => {
+        doc.schema_version = Math.max(doc.schema_version || 1, 2);
+        const acct = (doc.account && typeof doc.account === "object") ? doc.account : {};
+        acct.history = Array.isArray(acct.history) ? acct.history : [];
+        acct.history.push({ total_capital: v, changed_at: now, ...(note ? { note } : {}) });
+        acct.total_capital = v;
+        acct.updated_at = now;
+        doc.account = acct;
+      }, `account: set total capital to ${v}`);
+      $("#capital-dialog").close();
+      setPicksStatus(`Saved ✓ — total capital is now ${fmtUsd(v)}; the screener uses it ` +
+        `from its next run` + (commit ? ` (commit ${commit.slice(0, 7)})` : "") + ".");
+    } catch (e) {
+      errEl.textContent = `Could not save: ${e.message} — nothing was changed.`;
+      errEl.classList.remove("hidden");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Save";
     }
   }
 
@@ -486,6 +680,8 @@ const GYBTrack = (() => {
     section.classList.remove("hidden");
     $("#picks-stale-note").classList.toggle("hidden", !(state.stale && selections.length));
     refreshSetupBox();
+
+    $("#btn-adjust-capital").classList.toggle("hidden", !state.writable);
 
     const open = selections.filter((s) => s.status === "OPEN");
     const closed = selections.filter((s) => s.close && s.status !== "OPEN");
@@ -523,6 +719,16 @@ const GYBTrack = (() => {
       const verified = s.live_verified && s.verify
         ? ` <span class="badge-${s.verify.verdict === "green" ? "win" : "flag"}" title="Verified against live broker data at entry — verdict: ${esc(s.verify.verdict)}.">verified</span>`
         : "";
+      // "If it ended today": settle at the last screened stock price — the
+      // premium in full above the strike, minus the assignment loss below it.
+      let est = null;
+      if (spot != null && s.entry_premium != null) {
+        const perShare = spot > s.strike ? s.entry_premium : s.entry_premium - (s.strike - spot);
+        est = perShare * 100 * (s.contracts || 1);
+      }
+      const estCell = est == null
+        ? `<span class="muted">—</span>`
+        : `<span style="color:${est >= 0 ? COLORS.green : COLORS.red}">${est >= 0 ? "+" : "−"}${fmtUsd(Math.abs(est))}</span>`;
       return `<tr>
         <td>${esc(s.ticker)}${verified}</td>
         <td class="num">${fmtNum(s.strike)}</td>
@@ -532,6 +738,7 @@ const GYBTrack = (() => {
         <td class="num">${fmtUsd(premiumUsd(s))}</td>
         <td class="num">${fmtUsd(s.collateral)}</td>
         <td>${now}</td>
+        <td class="num">${estCell}</td>
         <td>${act}</td>
       </tr>`;
     }).join("");
@@ -540,17 +747,27 @@ const GYBTrack = (() => {
     $("#picks-closed-block").classList.toggle("hidden", !closed.length);
     $("#picks-closed tbody").innerHTML = [...closed]
       .sort((a, b) => String(b.close.closed_at || "").localeCompare(String(a.close.closed_at || "")))
-      .map((s) => `<tr>
+      .map((s) => {
+        const edited = s.close.edited_at
+          ? ` <span class="muted" title="Manually corrected on ${esc(String(s.close.edited_at).slice(0, 10))}.">✎</span>`
+          : "";
+        const editBtn = state.writable
+          ? `<button type="button" class="btn-select btn-edit-close" data-uid="${esc(s.uid)}">Edit…</button>`
+          : "";
+        return `<tr>
         <td>${esc(s.ticker)}</td>
         <td class="num">${fmtNum(s.strike)}</td>
         <td class="num">${s.contracts ?? 1}</td>
         <td>${esc(s.close.closed_at || "")}</td>
-        <td>${RESULT_BADGE[s.status] || esc(s.status)}</td>
+        <td>${RESULT_BADGE[s.status] || esc(s.status)}${edited}</td>
         <td class="num">${(s.close.pnl_usd ?? 0) >= 0 ? "+" : "−"}${fmtUsd(Math.abs(s.close.pnl_usd ?? 0))}</td>
         <td class="num">${fmtPct(s.close.realized_roc)}</td>
-      </tr>`).join("");
+        <td>${editBtn}</td>
+      </tr>`;
+      }).join("");
 
     renderPnlChart(closed);
+    updateCapitalCards();
   }
 
   function renderPnlChart(closed) {
@@ -596,11 +813,27 @@ const GYBTrack = (() => {
     $("#cls-cancel").addEventListener("click", () => $("#close-dialog").close());
     $("#cls-confirm").addEventListener("click", confirmClose);
 
+    $("#ecl-price").addEventListener("input", updateEditCloseMath);
+    $("#ecl-date").addEventListener("input", updateEditCloseMath);
+    $("#ecl-cancel").addEventListener("click", () => $("#edit-close-dialog").close());
+    $("#ecl-confirm").addEventListener("click", confirmEditClose);
+
+    $("#btn-adjust-capital").addEventListener("click", openCapitalModal);
+    $("#cap-cancel").addEventListener("click", () => $("#capital-dialog").close());
+    $("#cap-confirm").addEventListener("click", confirmCapital);
+
     $("#picks-open tbody").addEventListener("click", (ev) => {
       const btn = ev.target.closest(".btn-close-early");
       if (!btn) return;
       const sel = ((state.doc || {}).selections || []).find((s) => s.uid === btn.dataset.uid);
       if (sel) openCloseModal(sel);
+    });
+
+    $("#picks-closed tbody").addEventListener("click", (ev) => {
+      const btn = ev.target.closest(".btn-edit-close");
+      if (!btn) return;
+      const sel = ((state.doc || {}).selections || []).find((s) => s.uid === btn.dataset.uid);
+      if (sel) openEditCloseModal(sel);
     });
   }
 

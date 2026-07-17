@@ -91,6 +91,11 @@ def run(args: argparse.Namespace) -> int:
     regime = regime_mod.assess(spy_hist, vix, breadth, config)
 
     account = size_mod.load_positions(args.positions, args.selections)
+    # Dashboard-set capital wins over config.yaml. One mutation covers every
+    # downstream reader: sizing caps, the capital sanity check, the report
+    # header, and the snapshot's thresholds.account (client-side verify).
+    if account.total_capital_override is not None:
+        config["account"]["total_capital"] = account.total_capital_override
 
     if regime.is_red:
         header = report_mod.build_header(regime, account, config)

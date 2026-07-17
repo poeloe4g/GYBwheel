@@ -28,6 +28,13 @@ class AccountState:
     per_ticker: dict[str, float] = field(default_factory=dict)
     positions_loaded: bool = False
     source: str = "greenfield (no positions.yaml)"
+    # Collateral from positions.yaml alone (total_deployed minus OPEN
+    # selections) — lets the dashboard recompute deployed live without
+    # double-counting the selections baked into a stale snapshot.
+    deployed_positions: float = 0.0
+    # Dashboard-set total capital (selections.json ``account.total_capital``);
+    # None means "use config.yaml".
+    total_capital_override: float | None = None
 
 
 def _apply(state: AccountState, ticker: str, sector: str, collateral: float) -> None:
@@ -46,6 +53,10 @@ def load_positions(
       - positions.yaml — positions opened outside the dashboard (manual);
       - site/data/selections.json — OPEN picks selected in the dashboard.
     The same position must live in only one of them or it counts double.
+
+    The selections doc may also carry a dashboard-set capital override
+    (``account.total_capital``) — picked up here so the very next run sizes
+    against it (config.yaml stays the fallback).
     """
     sources: list[str] = []
     state = AccountState()
@@ -58,10 +69,16 @@ def load_positions(
             _apply(state, (pos.get("ticker") or "").upper(),
                    pos.get("sector", "Unknown"), float(pos.get("collateral", 0) or 0))
         sources.append(str(p))
+    state.deployed_positions = state.total_deployed
 
-    n_open = _apply_open_selections(state, selections_path)
+    doc = _load_selections_doc(selections_path)
+    n_open = _apply_open_selections(state, doc)
     if n_open:
         sources.append(f"{n_open} open selection{'s' if n_open != 1 else ''}")
+
+    state.total_capital_override = _capital_override(doc)
+    if state.total_capital_override is not None:
+        sources.append(f"capital override ${state.total_capital_override:,.0f}")
 
     if sources:
         state.positions_loaded = True
@@ -69,20 +86,55 @@ def load_positions(
     return state
 
 
-def _apply_open_selections(state: AccountState, path: str | Path) -> int | None:
-    """Accumulate OPEN dashboard selections; None if no readable file.
-
-    A malformed file or entry must never fail the run — warn and skip, like
-    build_index tolerates corrupt snapshots.
-    """
+def _load_selections_doc(path: str | Path) -> dict[str, Any] | None:
+    """Parse the selections doc; None if absent/unreadable (never fails a run)."""
     p = Path(path)
     if not p.exists():
         return None
     try:
         doc = json.loads(p.read_text(encoding="utf-8"))
-        entries = doc.get("selections") or []
-    except (json.JSONDecodeError, OSError, AttributeError) as exc:
+    except (json.JSONDecodeError, OSError) as exc:
         log.warning("selections file %s unreadable (%s) — ignoring", p, exc)
+        return None
+    if not isinstance(doc, dict):
+        log.warning("selections file %s is not an object — ignoring", p)
+        return None
+    return doc
+
+
+def _capital_override(doc: dict[str, Any] | None) -> float | None:
+    """Dashboard capital override from ``account.total_capital``, if valid.
+
+    Anything but a finite number > 0 is ignored with a warning — a bad
+    override must never fail or distort the run.
+    """
+    if not doc:
+        return None
+    account = doc.get("account")
+    if not isinstance(account, dict) or "total_capital" not in account:
+        return None
+    raw = account.get("total_capital")
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        value = math.nan
+    if not math.isfinite(value) or value <= 0:
+        log.warning("ignoring invalid capital override %r in selections file", raw)
+        return None
+    return value
+
+
+def _apply_open_selections(state: AccountState, doc: dict[str, Any] | None) -> int | None:
+    """Accumulate OPEN dashboard selections; None if no readable doc.
+
+    A malformed entry must never fail the run — warn and skip, like
+    build_index tolerates corrupt snapshots.
+    """
+    if doc is None:
+        return None
+    entries = doc.get("selections") or []
+    if not isinstance(entries, list):
+        log.warning("selections doc has non-list 'selections' — ignoring")
         return None
     n_open = 0
     for sel in entries:
