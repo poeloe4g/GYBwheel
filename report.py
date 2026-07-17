@@ -33,7 +33,11 @@ from typing import Any
 #       ``risk_adjusted``; ``meta.market_session_end`` stamps the session at
 #       the END of the run too (``quotes_trusted`` requires both endpoints in
 #       regular hours).
-SCHEMA_VERSION = 4
+#   v5: ``thresholds.quality`` (the numeric gate limits + ``risk_free_rate`` +
+#       ``score_denominator_floor``) and ``thresholds.premium_basis``, so the
+#       dashboard can re-run the quality gates client-side against live broker
+#       quotes without hardcoding any threshold.
+SCHEMA_VERSION = 5
 
 CSV_COLUMNS = [
     "ticker", "sector", "expiration", "dte", "strike", "mid", "premium_used",
@@ -170,10 +174,21 @@ def write_json(
             "dte": config.get("dte"),
             "delta": config.get("delta"),
             "scoring_mode": config.get("scoring", {}).get("mode"),
+            "premium_basis": config.get("scoring", {}).get("premium_basis", "conservative"),
             "regime": config.get("regime"),
             "account": config.get("account"),
             "avoid_earnings_before_expiry": quality.get("avoid_earnings_before_expiry"),
             "unknown_earnings_policy": quality.get("unknown_earnings_policy"),
+            "quality": {
+                "min_yield_30dte": quality.get("min_yield_30dte"),
+                "max_implied_move": quality.get("max_implied_move"),
+                "max_spread_pct": quality.get("max_spread_pct"),
+                "max_spread_abs": quality.get("max_spread_abs"),
+                "min_open_interest": quality.get("min_open_interest"),
+                "min_distance_to_strike": quality.get("min_distance_to_strike"),
+                "risk_free_rate": quality.get("risk_free_rate", 0.04),
+                "score_denominator_floor": quality.get("score_denominator_floor"),
+            },
         },
         "rows": rows,
         "near_misses": near_misses,

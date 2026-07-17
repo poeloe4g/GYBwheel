@@ -291,6 +291,37 @@
     <h3 id="sel-title"></h3>
     <p id="sel-desc" class="muted"></p>
     <div id="sel-warning" class="notice hidden"></div>
+    <details class="explainer verify-panel" id="sel-verify">
+      <summary>Verify with live broker data (optional)</summary>
+      <div class="explainer-body">
+        <p class="muted">The screener's numbers come from Yahoo Finance and may be hours old.
+          Type what your broker shows right now and every safety check re-runs on the live
+          numbers. Change the contract only if your broker doesn't list this exact one.</p>
+        <div class="verify-grid">
+          <label>Buy-at $ (strike)
+            <input type="number" id="vf-strike" min="0" step="0.5" /></label>
+          <label>Expiration
+            <input type="date" id="vf-expiration" /></label>
+        </div>
+        <div class="verify-grid">
+          <label>Bid $
+            <input type="number" id="vf-bid" min="0" step="0.01" /></label>
+          <label>Ask $
+            <input type="number" id="vf-ask" min="0" step="0.01" /></label>
+          <label>Stock price $
+            <input type="number" id="vf-spot" min="0" step="0.01" /></label>
+        </div>
+        <div id="vf-result" class="hidden">
+          <div class="verify-verdict-row">
+            <span id="vf-verdict" class="verdict-pill"></span>
+            <button type="button" id="vf-clear">Clear</button>
+          </div>
+          <div id="vf-metrics" class="muted"></div>
+          <ul id="vf-gates" class="gate-list"></ul>
+        </div>
+        <p class="muted">Outside market hours your broker's quotes may be stale too.</p>
+      </div>
+    </details>
     <label class="modal-label" for="sel-contracts">How many contracts?</label>
     <div class="stepper">
       <button type="button" id="sel-minus" aria-label="one fewer contract">−</button>
@@ -328,6 +359,7 @@
   </dialog>
 
   <script src="app.js"></script>
+  <script src="verify.js"></script>
   <script src="track.js"></script>
 </body>
 </html>

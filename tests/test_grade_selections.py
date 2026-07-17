@@ -128,6 +128,41 @@ def test_missing_file_and_malformed_entries(tmp_path, capsys):
     assert doc["selections"][1]["status"] == "EXPIRED_WIN"
 
 
+def test_live_verified_entries_grade_alongside_old_shape(tmp_path):
+    """New live-verified entries (with overridden contracts) grade like any
+    other: P&L from the live strike/premium, verify block preserved verbatim."""
+    verify = {
+        "verified_at": "2026-07-05T14:00:00Z",
+        "bid": 1.00, "ask": 1.10, "spot": 101.0,
+        "iv": 0.28, "iv_source": "solved",
+        "abs_delta": 0.21, "implied_move": 0.086,
+        "score": 1.234, "score_mode": "risk_adjusted", "screener_score": 1.301,
+        "verdict": "amber",
+        "gates": [{"code": "oi_unknown", "status": "flag",
+                   "message": "different contract than screened"}],
+        "contract_overridden": True,
+        "screener_contract": {"strike": 92.0, "expiration": "2026-08-07"},
+    }
+    # Live strike 90 (screener screened 92), live conservative premium 1.0375.
+    verified = _sel(strike=90.0, premium=1.0375, contracts=1,
+                    live_verified=True, verify=verify,
+                    entry_premium_basis="conservative")
+    path = _write(tmp_path, _sel(ticker="LOSER"), verified)
+    provider = FakeProvider({"WINNER": WIN_HIST, "LOSER": BREACH_HIST})
+    doc = gs.grade_file(path, provider, today=date(2026, 8, 10))
+
+    old, new = doc["selections"]
+    assert old["status"] == "ASSIGNED"          # old-shape entry unaffected
+    assert "verify" not in old
+    assert new["status"] == "EXPIRED_WIN"       # expiry close 98 > live strike 90
+    # P&L uses the LIVE premium and strike, not the screener's.
+    assert new["close"]["pnl_usd"] == round(1.0375 * 100, 2)
+    # The verify block survives grading byte-for-byte.
+    assert new["verify"] == verify
+    assert new["live_verified"] is True
+    assert doc["summary"]["closed"]["n"] == 2
+
+
 def test_main_cli_with_injected_provider(tmp_path, capsys):
     path = _write(tmp_path, _sel())
     rc = gs.main(["--selections", str(path), "--today", "2026-08-10"],

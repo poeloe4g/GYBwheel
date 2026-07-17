@@ -119,7 +119,7 @@ def test_red_regime_short_circuits(tmp_path, monkeypatch, capsys):
     assert not (tmp_path / "out.csv").exists()  # stopped before writing
     # RED days still appear on the dashboard timeline, with no candidates.
     doc = json.loads(json_out.read_text())
-    assert doc["schema_version"] == 4
+    assert doc["schema_version"] == 5
     assert doc["regime"]["light"] == "RED"
     assert doc["rows"] == []
     assert doc["near_misses"] == []
@@ -143,7 +143,7 @@ def test_green_end_to_end_writes_csv(tmp_path, monkeypatch, capsys):
 
     # JSON snapshot mirrors the run for the dashboard.
     doc = json.loads(json_out.read_text())
-    assert doc["schema_version"] == 4
+    assert doc["schema_version"] == 5
     assert doc["regime"]["light"] == "GREEN"
     assert set(doc["regime"]["signals"]) == {
         "spy_below_200dma", "breadth_below_floor", "vix_high_and_spy_falling"}
@@ -326,7 +326,7 @@ def test_unknown_earnings_promoted_with_flag(tmp_path, monkeypatch):
     assert rc == 0
 
     doc = json.loads(json_out.read_text())
-    assert doc["schema_version"] == 4
+    assert doc["schema_version"] == 5
     rows = {r["ticker"]: r for r in doc["rows"]}
     assert set(rows) == {"MEGA", "NOEARN"}
     assert rows["MEGA"]["data_flags"] == []

@@ -40,6 +40,11 @@ const FRIENDLY_CODE = {
   quote_indicative: "Price from last trade, not a live quote",
   universe: "Failed company-quality screen",
   no_spot: "No stock price",
+  delta_band: "Odds outside the target band",
+  expired: "Already expired",
+  crossed_quote: "Bid above ask",
+  one_sided_quote: "One-sided quote",
+  iv_stale: "Using screener's volatility",
   no_put_in_band: "No suitable contract",
   no_expiry_in_window: "No expiry in the target window",
 };

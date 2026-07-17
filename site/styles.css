@@ -168,6 +168,31 @@ dialog.modal h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }
 }
 .stepper button:hover { border-color: var(--accent); color: var(--accent); }
 
+/* Live-data verification panel inside the select dialog */
+.verify-panel { margin: 0.7rem 0; font-size: 0.85rem; }
+.verify-panel summary { padding: 0.5rem 0.8rem; }
+.verify-grid { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.4rem 0; }
+.verify-grid label { flex: 1; min-width: 90px; font-size: 0.78rem; color: var(--muted); }
+.verify-grid input {
+  display: block; width: 100%; margin-top: 0.15rem;
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: 0.35rem 0.45rem;
+}
+.verify-verdict-row { display: flex; align-items: center; gap: 0.5rem; margin: 0.55rem 0 0.35rem; }
+.verify-verdict-row button {
+  background: var(--panel-2); color: var(--muted); border: 1px solid var(--border);
+  border-radius: 6px; padding: 0.2rem 0.6rem; font-size: 0.75rem; cursor: pointer;
+}
+.verdict-pill { border-radius: 999px; padding: 0.15rem 0.7rem; font-size: 0.78rem; font-weight: 700; }
+.verdict-green { background: rgba(26,152,80,0.25); color: #7fd8a4; border: 1px solid var(--green); }
+.verdict-amber { background: rgba(224,168,0,0.2); color: var(--yellow); border: 1px solid var(--yellow); }
+.verdict-red { background: rgba(215,48,39,0.25); color: #ffb3ad; border: 1px solid var(--red); }
+.gate-list { list-style: none; margin: 0.4rem 0 0; padding: 0; }
+.gate-list li { padding: 0.15rem 0; font-size: 0.78rem; cursor: help; }
+.gate-pass { color: #7fd8a4; }
+.gate-fail { color: #ffb3ad; }
+.gate-flag { color: var(--muted); }
+
 /* Data-freshness badges next to the generated-at timestamp */
 .badge-stale { background: var(--red); color: #fff; border-radius: 4px; padding: 0.05rem 0.4rem; font-size: 0.7rem; font-weight: 700; margin-left: 0.4rem; }
 .badge-not-today { background: rgba(224,168,0,0.2); color: var(--yellow); border: 1px solid var(--yellow); border-radius: 4px; padding: 0.05rem 0.4rem; font-size: 0.7rem; font-weight: 600; margin-left: 0.4rem; }
