@@ -780,14 +780,20 @@ const GYBTrack = (() => {
       .sort((a, b) => String(a.close.closed_at || "").localeCompare(String(b.close.closed_at || "")));
     let cum = 0;
     const data = points.map((s) => { cum += s.close.pnl_usd || 0; return Math.round(cum * 100) / 100; });
+    // Diverging by sign: green while the running total is in profit, red once
+    // it dips into a loss, with the zero line drawn as the emphasized baseline.
+    const up = COLORS.green, down = COLORS.red;
+    const colorFor = (v) => (v < 0 ? down : up);
     charts["chart-my-pnl"] = new Chart($("#chart-my-pnl"), {
       type: "line",
       data: { labels: points.map((s) => s.close.closed_at),
-        datasets: [{ label: "Running P&L $", data, borderColor: COLORS.accent,
-          backgroundColor: COLORS.accent, tension: 0.2, pointRadius: 3 }] },
+        datasets: [{ label: "Running P&L $", data, borderColor: up, backgroundColor: up,
+          pointBackgroundColor: data.map(colorFor),
+          segment: { borderColor: (ctx) => colorFor(Math.min(ctx.p0.parsed.y, ctx.p1.parsed.y)) } }] },
       options: { plugins: { legend: { display: false },
         tooltip: { callbacks: { label: (c) => `Running total: ${c.raw >= 0 ? "+" : "−"}$${Math.abs(c.raw).toLocaleString()}` } } },
-        scales: { x: { grid: { color: COLORS.grid } }, y: { grid: { color: COLORS.grid } } } },
+        scales: { x: axisX(),
+          y: axisY({ grid: { color: (ctx) => (ctx.tick.value === 0 ? COLORS.axis : COLORS.grid) } }) } },
     });
   }
 

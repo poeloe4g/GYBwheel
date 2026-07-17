@@ -9,6 +9,20 @@
   --muted: #8b98a5;
   --border: #2d3743;
   --accent: #4a9eff;
+
+  /* Data-viz tokens — categorical palette validated CVD-safe against the
+     panel surface (#1a2029) with dataviz/scripts/validate_palette.js.
+     Status green/yellow/red are deliberately NOT reused as series colors. */
+  --series-1: #3987e5; /* blue    */
+  --series-2: #008300; /* green   */
+  --series-3: #d55181; /* magenta */
+  --series-4: #c98500; /* yellow  */
+  --series-5: #199e70; /* aqua    */
+  --series-6: #d95926; /* orange  */
+  --series-7: #9085e9; /* violet  */
+  --series-8: #e66767; /* red     */
+  --grid: #212a35;     /* hairline gridline, one shade off the panel */
+  --axis: #3a4653;     /* baseline / axis rule */
 }
 
 * { box-sizing: border-box; }
@@ -95,11 +109,48 @@ select {
 
 h2 { font-size: 1.1rem; margin: 1.5rem 0 0.75rem; }
 
+/* Section eyebrow — a small band label above a group of charts */
+.section-eyebrow {
+  color: var(--accent); font-size: 0.7rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.09em;
+  margin: 1.6rem 0 0.55rem; padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+}
+
 /* Charts */
 .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
-.chart-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem; margin: 0; }
-.chart-card figcaption { color: var(--muted); font-size: 0.8rem; margin-bottom: 0.5rem; }
-.chart-card canvas { width: 100% !important; height: 240px !important; }
+.chart-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 0.85rem 0.9rem 0.75rem; margin: 0; transition: border-color 0.15s ease;
+}
+.chart-card:hover { border-color: #3a4756; }
+.chart-card figcaption { color: var(--muted); font-size: 0.8rem; margin-bottom: 0.6rem; }
+/* Height includes the x-axis band; charts run maintainAspectRatio:false. */
+.chart-card .canvas-wrap { position: relative; height: 250px; }
+.chart-card canvas { width: 100% !important; height: 100% !important; }
+
+/* KPI strip — the headline numbers that lead the run analysis */
+.kpi-cards { margin-bottom: 1.25rem; }
+.kpi-cards .card { display: flex; flex-direction: column; }
+.kpi-cards .value { font-size: 1.55rem; font-weight: 650; font-variant-numeric: normal; letter-spacing: -0.01em; }
+.kpi-sub { color: var(--muted); font-size: 0.72rem; margin-top: 0.15rem; }
+
+/* Slim progress meter (replaces the 2-slice gauge doughnut) */
+.meter { height: 7px; border-radius: 999px; background: var(--panel-2); overflow: hidden; margin-top: 0.5rem; }
+.meter > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); transition: width 0.3s ease; }
+
+/* Regime status-strip timeline (replaces the all-1s bar chart) */
+.status-strip { display: flex; gap: 2px; align-items: stretch; height: 210px; }
+.status-strip .seg { flex: 1 1 0; min-width: 3px; border-radius: 3px; cursor: help; transition: filter 0.12s ease; }
+.status-strip .seg:hover { filter: brightness(1.25); }
+.status-strip .seg-green  { background: var(--green); }
+.status-strip .seg-yellow { background: var(--yellow); }
+.status-strip .seg-red    { background: var(--red); }
+.status-strip .seg-unknown { background: var(--panel-2); }
+.status-strip-axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.72rem; margin-top: 0.5rem; }
+.status-strip-legend { display: flex; gap: 0.9rem; margin-top: 0.55rem; color: var(--muted); font-size: 0.72rem; flex-wrap: wrap; }
+.status-strip-legend span { display: inline-flex; align-items: center; gap: 0.3rem; }
+.status-strip-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
 
 /* Table */
 .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }

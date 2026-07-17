@@ -1,11 +1,34 @@
 "use strict";
 
-// Colors mirror styles.css :root
-const COLORS = {
-  green: "#1a9850", yellow: "#e0a800", red: "#d73027",
-  accent: "#4a9eff", muted: "#8b98a5", grid: "#2d3743",
+// Single source of truth: read the design tokens straight from styles.css so
+// the JS palette can never drift from the CSS one.
+const cssVar = (name, fallback) => {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
 };
-const REGIME_COLOR = { GREEN: COLORS.green, YELLOW: COLORS.yellow, RED: COLORS.red };
+const COLORS = {
+  green: cssVar("--green", "#1a9850"),
+  yellow: cssVar("--yellow", "#e0a800"),
+  red: cssVar("--red", "#d73027"),
+  accent: cssVar("--accent", "#4a9eff"),
+  muted: cssVar("--muted", "#8b98a5"),
+  grid: cssVar("--grid", "#212a35"),
+  axis: cssVar("--axis", "#3a4653"),
+  panel: cssVar("--panel", "#1a2029"),
+};
+// CVD-safe categorical palette (validated against the panel surface). Status
+// green/yellow/red are intentionally kept out of these slots.
+const SERIES = [
+  cssVar("--series-1", "#3987e5"), cssVar("--series-2", "#008300"),
+  cssVar("--series-3", "#d55181"), cssVar("--series-4", "#c98500"),
+  cssVar("--series-5", "#199e70"), cssVar("--series-6", "#d95926"),
+  cssVar("--series-7", "#9085e9"), cssVar("--series-8", "#e66767"),
+];
+// Semi-transparent tint of a hex color (for area/bubble fills).
+const tint = (hex, a) => {
+  const n = parseInt(hex.replace("#", ""), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+};
 
 // Plain-language framing for the regime traffic light.
 const REGIME_PLAIN = {
@@ -83,7 +106,58 @@ if (HAS_CHART) {
   Chart.defaults.color = COLORS.muted;
   Chart.defaults.borderColor = COLORS.grid;
   Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+  Chart.defaults.font.size = 11;
+  // Canvases live in a fixed-height .canvas-wrap, so let them fill it.
+  Chart.defaults.maintainAspectRatio = false;
+  // Calmer marks: thin rounded bars, hover-only points, 2px lines.
+  Chart.defaults.elements.bar.borderRadius = 4;
+  Chart.defaults.elements.bar.borderSkipped = false;
+  Chart.defaults.elements.point.radius = 0;
+  Chart.defaults.elements.point.hoverRadius = 5;
+  Chart.defaults.elements.point.hitRadius = 14;
+  Chart.defaults.elements.line.borderWidth = 2;
+  Chart.defaults.elements.line.tension = 0.3;
+  // Consistent, quiet tooltip.
+  Object.assign(Chart.defaults.plugins.tooltip, {
+    backgroundColor: "#0d1117", borderColor: COLORS.grid, borderWidth: 1,
+    padding: 10, cornerRadius: 8, titleColor: "#e6edf3", bodyColor: "#c3c2b7",
+    displayColors: false,
+  });
 }
+
+// Recessive hairline axes shared by every cartesian chart.
+const axisX = (extra = {}) => ({
+  grid: { color: COLORS.grid, drawTicks: false },
+  border: { display: false },
+  ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8 },
+  ...extra,
+});
+const axisY = (extra = {}) => ({
+  grid: { color: COLORS.grid, drawTicks: false },
+  border: { display: false },
+  ...extra,
+});
+
+// Tiny inline plugin: draw the value at the end of each horizontal bar. Keeps
+// the headline bars readable without pulling in chartjs-plugin-datalabels.
+const barValueLabels = (fmt) => ({
+  id: "barValueLabels",
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    const meta = chart.getDatasetMeta(0);
+    ctx.save();
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = "11px " + Chart.defaults.font.family;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    meta.data.forEach((el, i) => {
+      const v = chart.data.datasets[0].data[i];
+      if (v == null) return;
+      ctx.fillText(fmt(v), el.x + 6, el.y);
+    });
+    ctx.restore();
+  },
+});
 
 async function fetchJson(path) {
   const res = await fetch(path, { cache: "no-store" });
@@ -289,70 +363,101 @@ function renderRejectionChart(doc) {
   charts["chart-rejections"] = new Chart($("#chart-rejections"), {
     type: "bar",
     data: { labels: entries.map(([k]) => friendly(k)),
-      datasets: [{ data: entries.map(([, v]) => v), backgroundColor: COLORS.yellow }] },
-    options: { indexAxis: "y", plugins: { legend: { display: false },
-      tooltip: { callbacks: { label: (c) => `${c.raw} stock${c.raw === 1 ? "" : "s"}` } } },
-      scales: { x: { grid: { color: COLORS.grid }, ticks: { precision: 0 } },
-        y: { grid: { display: false } } } },
+      datasets: [{ data: entries.map(([, v]) => v), backgroundColor: SERIES[0], maxBarThickness: 20 }] },
+    options: { indexAxis: "y", layout: { padding: { right: 24 } },
+      plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: (c) => `${c.raw} stock${c.raw === 1 ? "" : "s"}` } } },
+      scales: { x: axisX({ beginAtZero: true, ticks: { precision: 0 } }), y: axisY({ grid: { display: false } }) } },
+    plugins: [barValueLabels((v) => String(v))],
   });
+}
+
+// Headline numbers that lead the run analysis — the 3-4 figures that matter,
+// so the section opens on an answer instead of four charts.
+function renderKpis(doc) {
+  const rows = (doc.rows || []).map(enrich);
+  const fit = rows.filter((r) => (r.max_contracts ?? 0) >= 1);
+  const best = rows.reduce((m, r) => (r.score != null && (m == null || r.score > m) ? r.score : m), null);
+  const topPick = fit[0] || null; // rows arrive pre-ranked, best actionable first
+  const pct = (doc.header && doc.header.pct_deployed) || 0;
+  const pctW = Math.min(100, Math.max(0, Math.round(pct * 100)));
+  const cards = [
+    ["Best score", best != null ? fmtNum(best, 3) : "—", "Higher = better premium for the risk"],
+    ["Ideas that fit", rows.length ? `${fit.length} of ${rows.length}` : "—", "Pass every check and fit your account"],
+    ["Top-pick yield", topPick && topPick.annualized_yield != null ? fmtPct(topPick.annualized_yield) : "—",
+      topPick ? `${esc(topPick.ticker)} · annualized` : "No idea fits today"],
+    ["Cash committed", fmtPct(pct), `<div class="meter"><span style="width:${pctW}%"></span></div>`],
+  ];
+  $("#kpi-cards").innerHTML = cards.map(([l, v, sub]) =>
+    `<div class="card"><div class="label">${l}</div><div class="value">${v}</div><div class="kpi-sub">${sub}</div></div>`
+  ).join("");
 }
 
 function renderRunCharts(doc) {
   if (!HAS_CHART) return;
   const rows = (doc.rows || []).map(enrich);
+  const topTicker = (rows.find((r) => (r.max_contracts ?? 0) >= 1) || {}).ticker;
 
-  // Top candidates by score (horizontal bar)
+  // Best ideas by score (horizontal bar) — single series, direct value labels.
   const top = [...rows].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 10);
   destroyChart("chart-top-score");
   charts["chart-top-score"] = new Chart($("#chart-top-score"), {
     type: "bar",
     data: { labels: top.map((r) => r.ticker),
-      datasets: [{ data: top.map((r) => r.score), backgroundColor: COLORS.accent }] },
-    options: { indexAxis: "y", plugins: { legend: { display: false } },
-      scales: { x: { grid: { color: COLORS.grid } }, y: { grid: { display: false } } } },
+      datasets: [{ data: top.map((r) => r.score), backgroundColor: SERIES[0], maxBarThickness: 20 }] },
+    options: { indexAxis: "y", layout: { padding: { right: 34 } },
+      plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: (c) => `Score ${fmtNum(c.raw, 3)}` } } },
+      scales: { x: axisX({ beginAtZero: true }), y: axisY({ grid: { display: false } }) } },
+    plugins: [barValueLabels((v) => fmtNum(v, 3))],
   });
 
-  // Yield vs distance scatter (bubble size ~ max_contracts)
+  // Yield vs cushion (bubble; size ~ contracts that fit). The top pick is
+  // highlighted so the eye lands on the actionable idea.
   destroyChart("chart-yield-distance");
   charts["chart-yield-distance"] = new Chart($("#chart-yield-distance"), {
     type: "bubble",
     data: { datasets: [{
       data: rows.map((r) => ({ x: (r.distance_to_strike || 0) * 100,
-        y: (r.annualized_yield || 0) * 100, r: 4 + 2 * (r.max_contracts || 0), ticker: r.ticker })),
-      backgroundColor: "rgba(74,158,255,0.55)" }] },
+        y: (r.annualized_yield || 0) * 100, r: 5 + 2 * (r.max_contracts || 0), ticker: r.ticker })),
+      backgroundColor: rows.map((r) => tint(r.ticker === topTicker ? SERIES[5] : SERIES[0], 0.55)),
+      borderColor: COLORS.panel, borderWidth: 2 }] },
     options: { plugins: { legend: { display: false },
       tooltip: { callbacks: { label: (c) => `${c.raw.ticker}: ${c.raw.y.toFixed(1)}% yearly yield with a ${c.raw.x.toFixed(1)}% cushion` } } },
-      scales: { x: { title: { display: true, text: "Safety cushion % (room to fall)" }, grid: { color: COLORS.grid } },
-        y: { title: { display: true, text: "Yearly yield %" }, grid: { color: COLORS.grid } } } },
+      scales: { x: axisX({ title: { display: true, text: "Safety cushion % (room to fall)" }, maxRotation: 0 }),
+        y: axisY({ title: { display: true, text: "Yearly yield %" } }) } },
   });
 
-  // Deployable collateral by sector (doughnut)
+  // Collateral by sector (doughnut) — categorical palette, 2px surface gaps.
+  // Weight by the cash that would actually be committed (collateral × contracts
+  // that fit). When nothing fits the account today that sum is zero and the
+  // ring would vanish, so fall back to one contract of each idea — the sector
+  // mix stays visible and the caption still reads true.
+  const collat = (r) => r.collateral_per_contract || (r.strike != null ? r.strike * 100 : 0);
   const bySector = {};
-  rows.forEach((r) => {
-    const v = (r.collateral_per_contract || 0) * (r.max_contracts || 0);
-    bySector[r.sector || "Unknown"] = (bySector[r.sector || "Unknown"] || 0) + v;
-  });
-  const palette = [COLORS.accent, COLORS.green, COLORS.yellow, COLORS.red, "#9b59b6", "#16a085", "#e67e22"];
+  const add = (weight) => {
+    Object.keys(bySector).forEach((k) => delete bySector[k]);
+    rows.forEach((r) => {
+      const s = r.sector || "Unknown";
+      bySector[s] = (bySector[s] || 0) + weight(r);
+    });
+  };
+  add((r) => collat(r) * (r.max_contracts || 0));
+  let perContract = false;
+  if (Object.values(bySector).reduce((a, b) => a + b, 0) === 0) {
+    add((r) => collat(r));
+    perContract = true;
+  }
   destroyChart("chart-sector");
   charts["chart-sector"] = new Chart($("#chart-sector"), {
     type: "doughnut",
     data: { labels: Object.keys(bySector),
       datasets: [{ data: Object.values(bySector),
-        backgroundColor: Object.keys(bySector).map((_, i) => palette[i % palette.length]) }] },
-    options: { plugins: { legend: { position: "bottom" } } },
-  });
-
-  // Capital deployed gauge (doughnut)
-  const pct = (doc.header && doc.header.pct_deployed) || 0;
-  destroyChart("chart-deployed");
-  charts["chart-deployed"] = new Chart($("#chart-deployed"), {
-    type: "doughnut",
-    data: { labels: ["Committed", "Available"],
-      datasets: [{ data: [pct, Math.max(0, 1 - pct)],
-        backgroundColor: [COLORS.accent, COLORS.grid] }] },
-    options: { circumference: 180, rotation: -90, cutout: "70%",
-      plugins: { legend: { display: false },
-        tooltip: { callbacks: { label: (c) => `${c.label}: ${(c.raw * 100).toFixed(1)}%` } } } },
+        backgroundColor: Object.keys(bySector).map((_, i) => SERIES[i % SERIES.length]),
+        borderColor: COLORS.panel, borderWidth: 2, hoverOffset: 6 }] },
+    options: { cutout: "58%",
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10, boxHeight: 10, padding: 12, usePointStyle: true } },
+        tooltip: { callbacks: { label: (c) => `${c.label}: ${fmtUsd(c.raw)}${perContract ? " per contract" : ""}` } } } },
   });
 }
 
@@ -364,6 +469,7 @@ function renderRun(doc) {
   tableState.rows = (doc.rows || []).map(enrich);
   renderTable();
   renderNearMisses(doc);
+  renderKpis(doc);
   renderRejectionChart(doc);
   renderRunCharts(doc);
 
@@ -401,12 +507,13 @@ function renderOutcomes(doc) {
       type: "bar",
       data: { labels: byCode.map(([k, a]) => `${friendly(k)} (n=${a.n})`),
         datasets: [{ data: byCode.map(([, a]) => (a.win_rate || 0) * 100),
-          backgroundColor: COLORS.accent }] },
-      options: { indexAxis: "y", plugins: { legend: { display: false },
-        tooltip: { callbacks: { label: (c) => `${c.raw.toFixed(1)}% win rate` } } },
-        scales: { x: { grid: { color: COLORS.grid }, min: 0, max: 100,
-          title: { display: true, text: "Win rate %" } },
-          y: { grid: { display: false } } } },
+          backgroundColor: SERIES[0], maxBarThickness: 20 }] },
+      options: { indexAxis: "y", layout: { padding: { right: 34 } },
+        plugins: { legend: { display: false },
+          tooltip: { callbacks: { label: (c) => `${c.raw.toFixed(1)}% win rate` } } },
+        scales: { x: axisX({ min: 0, max: 100, title: { display: true, text: "Win rate %" } }),
+          y: axisY({ grid: { display: false } }) } },
+      plugins: [barValueLabels((v) => `${Math.round(v)}%`)],
     });
   }
 
@@ -431,34 +538,38 @@ function renderOutcomes(doc) {
 
 // -------------------------------------------------------------- history render
 function renderHistory(index) {
-  if (!HAS_CHART) return;
   // Demo seed runs would mix fake scores into the real time-series.
   const runs = (index.runs || []).filter((r) => r.date && !r.demo);
   const labels = runs.map((r) => r.date);
 
-  destroyChart("hist-regime");
-  charts["hist-regime"] = new Chart($("#hist-regime"), {
-    type: "bar",
-    data: { labels, datasets: [{
-      data: runs.map(() => 1),
-      backgroundColor: runs.map((r) => REGIME_COLOR[r.light] || COLORS.muted) }] },
-    options: { plugins: { legend: { display: false },
-      tooltip: { callbacks: { label: (c) => runs[c.dataIndex].light } } },
-      scales: { y: { display: false }, x: { grid: { display: false } } } },
-  });
+  // Regime traffic light as a status-strip timeline — one thin segment per run,
+  // colored by light. Pure HTML, so it renders even if the Chart.js CDN fails.
+  const strip = $("#hist-regime");
+  if (strip) {
+    strip.innerHTML = runs.map((r) => {
+      const cls = (r.light || "unknown").toLowerCase();
+      return `<div class="seg seg-${cls}" title="${r.date}: ${r.light || "—"}"></div>`;
+    }).join("");
+    const axis = $("#hist-regime-axis");
+    if (axis) axis.innerHTML = labels.length
+      ? `<span>${labels[0]}</span><span>${labels[labels.length - 1]}</span>` : "";
+  }
 
-  const line = (id, data, label, color) => {
+  if (!HAS_CHART) return;
+
+  const line = (id, data, label, color, fill = false) => {
     destroyChart(id);
     charts[id] = new Chart($(id), {
       type: "line",
       data: { labels, datasets: [{ label, data, borderColor: color,
-        backgroundColor: color, tension: 0.2, pointRadius: 3 }] },
+        backgroundColor: fill ? tint(color, 0.14) : color, fill: fill ? "origin" : false,
+        pointBackgroundColor: color }] },
       options: { plugins: { legend: { display: false } },
-        scales: { x: { grid: { color: COLORS.grid } }, y: { grid: { color: COLORS.grid } } } },
+        scales: { x: axisX(), y: axisY() } },
     });
   };
-  line("#hist-top-score", runs.map((r) => r.top_score), "Top score", COLORS.accent);
-  line("#hist-deployed", runs.map((r) => (r.pct_deployed || 0) * 100), "% committed", COLORS.yellow);
+  line("#hist-top-score", runs.map((r) => r.top_score), "Top score", SERIES[0], true);
+  line("#hist-deployed", runs.map((r) => (r.pct_deployed || 0) * 100), "% committed", SERIES[3]);
 
   // Candidates + near misses share one chart; old index rows lack near_miss_count.
   destroyChart("#hist-count");
@@ -466,14 +577,13 @@ function renderHistory(index) {
     type: "line",
     data: { labels, datasets: [
       { label: "Ideas", data: runs.map((r) => r.row_count),
-        borderColor: COLORS.green, backgroundColor: COLORS.green, tension: 0.2, pointRadius: 3 },
+        borderColor: SERIES[0], backgroundColor: SERIES[0], pointBackgroundColor: SERIES[0] },
       { label: "Near misses", data: runs.map((r) => r.near_miss_count ?? null),
-        borderColor: COLORS.muted, backgroundColor: COLORS.muted,
-        borderDash: [6, 4], tension: 0.2, pointRadius: 3 },
+        borderColor: COLORS.muted, backgroundColor: COLORS.muted, pointBackgroundColor: COLORS.muted,
+        borderDash: [6, 4] },
     ] },
     options: { plugins: { legend: { display: true, position: "bottom" } },
-      scales: { x: { grid: { color: COLORS.grid } },
-        y: { grid: { color: COLORS.grid }, ticks: { precision: 0 } } } },
+      scales: { x: axisX(), y: axisY({ ticks: { precision: 0 } }) } },
   });
 }
 
