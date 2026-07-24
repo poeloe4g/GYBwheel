@@ -32,6 +32,12 @@ DEFAULT_CANDIDATES = [
 
 DEFAULT_TICKERS_FILE = "data/universe_sp100.txt"
 
+# Flag codes that are context, not data-quality problems: they stay visible on
+# the row (badges, outcomes calibration) but never route a candidate to the
+# near-miss table. The call-side check is a sanity check by design — it must
+# not shrink the put output.
+ADVISORY_FLAG_CODES = {"thin_call_side"}
+
 
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -129,6 +135,7 @@ def run(args: argparse.Namespace) -> int:
     scoring_cfg = config.get("scoring", {})
     prefer_affordable = bool(scoring_cfg.get("prefer_affordable", False))
     prefer_live_quotes = bool(scoring_cfg.get("prefer_live_quotes", True))
+    prefer_two_sided = bool(scoring_cfg.get("prefer_two_sided", True))
     premium_basis = _resolve_premium_basis(scoring_cfg)
     scored_rows = []
     near_miss_rows = []
@@ -200,7 +207,7 @@ def run(args: argparse.Namespace) -> int:
 
         # 6. Sizing + 7. Score — near-misses too, so they carry the full row shape.
         candidate = {**put, "ticker": ticker, "sector": f.get("sector", "Unknown"),
-                     "spot": spot}
+                     "spot": spot, "dividend_yield": f.get("dividend_yield")}
         sized = size_mod.size_candidate(candidate, account, config)
         scored = score_mod.score_candidate(sized, config, spot)
 
@@ -212,19 +219,26 @@ def run(args: argparse.Namespace) -> int:
                             f"${sized['min_account_for_1_contract']:,.0f})"),
             })
 
-        # Flags-only rows whose every flag is the earnings one are promotable
-        # under policy=flag; all other flags (iv_missing, spread_unknown,
-        # oi_unknown) keep the near-miss route — they never pass silently.
+        # Advisory flags are context, never routing signals: a thin call side
+        # must not cost a clean put its place in the main table. Routing and
+        # promotability look only at gating_flags; data_flags keeps the full
+        # list so badges and outcomes calibration still see advisory codes.
+        gating_flags = [e for e in flags if e["code"] not in ADVISORY_FLAG_CODES]
+
+        # Flags-only rows whose every gating flag is the earnings one are
+        # promotable under policy=flag; all other gating flags (iv_missing,
+        # spread_unknown, oi_unknown) keep the near-miss route — they never
+        # pass silently.
         promotable = (
             earnings_policy == "flag"
             and not rejections
-            and flags
-            and all(e["code"] == "earnings_unknown" for e in flags)
+            and gating_flags
+            and all(e["code"] == "earnings_unknown" for e in gating_flags)
         )
-        if rejections or (flags and not promotable):
+        if rejections or (gating_flags and not promotable):
             log.info("reject %s: %s", ticker,
-                     "; ".join(e["message"] for e in rejections + flags))
-            for e in rejections or flags:
+                     "; ".join(e["message"] for e in rejections + gating_flags))
+            for e in rejections or gating_flags:
                 _count(e["code"])
             near_miss_rows.append(
                 {**scored, "rejection_reasons": rejections, "data_flags": flags}
@@ -237,7 +251,8 @@ def run(args: argparse.Namespace) -> int:
             scored_rows.append({**scored, "data_flags": flags})
 
     ranked = score_mod.rank(scored_rows, prefer_affordable=prefer_affordable,
-                            prefer_live_quotes=prefer_live_quotes)[: args.max_rows]
+                            prefer_live_quotes=prefer_live_quotes,
+                            prefer_two_sided=prefer_two_sided)[: args.max_rows]
     near_misses = score_mod.rank(near_miss_rows)[: args.max_rows]
 
     # B1 capital sanity check — over every sized row (candidates AND near

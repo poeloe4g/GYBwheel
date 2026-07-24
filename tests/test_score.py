@@ -119,3 +119,27 @@ def test_rank_affordable_tier_outranks_quote_tier():
             {"score": 2.0, "affordable": True, "quote_quality": "live"}]
     ranked = score.rank(rows, prefer_affordable=True, prefer_live_quotes=True)
     assert [r["score"] for r in ranked] == [2.0, 1.0, 5.0]
+
+
+def test_rank_prefer_two_sided_ranks_thin_call_rows_lower():
+    rows = [{"score": 3.0, "thin_call_side": True},
+            {"score": 1.0, "thin_call_side": False},
+            {"score": 2.0},          # unmeasured call side never sinks a row
+            {"score": 1.5, "thin_call_side": None}]
+    ranked = score.rank(rows, prefer_two_sided=True)
+    assert [r["score"] for r in ranked] == [2.0, 1.5, 1.0, 3.0]
+    # Off by default: pure score order.
+    assert [r["score"] for r in score.rank(rows)] == [3.0, 2.0, 1.5, 1.0]
+
+
+def test_rank_two_sided_is_the_weakest_tier():
+    # Affordability and quote quality both dominate the call-side sanity tier.
+    rows = [{"score": 5.0, "affordable": True, "quote_quality": "last_price",
+             "thin_call_side": False},
+            {"score": 1.0, "affordable": True, "quote_quality": "live",
+             "thin_call_side": True},
+            {"score": 2.0, "affordable": False, "quote_quality": "live",
+             "thin_call_side": False}]
+    ranked = score.rank(rows, prefer_affordable=True, prefer_live_quotes=True,
+                        prefer_two_sided=True)
+    assert [r["score"] for r in ranked] == [1.0, 5.0, 2.0]

@@ -43,14 +43,20 @@ from typing import Any
 #       ``deployed_selections``, so the dashboard can recompute cash available
 #       from the live selections file without double-counting the OPEN picks
 #       baked into this snapshot.
-SCHEMA_VERSION = 6
+#   v7: call-side (covered-call) context — rows may carry ``call_yield_ann``,
+#       ``skew``, ``call_oi``, ``call_spread_pct``, ``thin_call_side``, and
+#       ``dividend_yield``; ``data_flags`` may include the advisory
+#       ``thin_call_side`` code (advisory flags never route rows to
+#       near-miss); ``thresholds.call_side`` echoes the call_side config.
+SCHEMA_VERSION = 7
 
 CSV_COLUMNS = [
     "ticker", "sector", "expiration", "dte", "strike", "mid", "premium_used",
     "abs_delta", "pop",
     "roc", "annualized_yield", "yield_30dte", "distance_to_strike", "implied_move",
     "score", "max_contracts", "collateral_per_contract", "affordable",
-    "breaches_per_name_cap", "min_account_for_1_contract", "flags",
+    "breaches_per_name_cap", "min_account_for_1_contract",
+    "call_yield_ann", "skew", "thin_call_side", "dividend_yield", "flags",
 ]
 
 
@@ -163,6 +169,7 @@ def write_json(
     """
     now = generated_at or datetime.now(timezone.utc)
     quality = config.get("quality", {})
+    call_side = config.get("call_side") or {}
     near_misses = near_misses or []
     meta = {
         "generated_at": now.isoformat(timespec="seconds"),
@@ -200,6 +207,16 @@ def write_json(
                 "min_distance_to_strike": quality.get("min_distance_to_strike"),
                 "risk_free_rate": quality.get("risk_free_rate", 0.04),
                 "score_denominator_floor": quality.get("score_denominator_floor"),
+            },
+            # Advisory thresholds only — they mint the thin_call_side flag,
+            # never a gate (see screen.evaluate_call_side). An absent config
+            # section means the feature is off (attach_call_side no-ops).
+            "call_side": {
+                "enabled": bool(call_side) and bool(call_side.get("enabled", True)),
+                "target_delta": call_side.get("target_delta", 0.25),
+                "min_open_interest": call_side.get("min_open_interest", 10),
+                "max_spread_pct": call_side.get("max_spread_pct", 0.25),
+                "max_spread_abs": call_side.get("max_spread_abs", 0.15),
             },
         },
         "rows": rows,

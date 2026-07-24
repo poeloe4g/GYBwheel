@@ -39,3 +39,21 @@ def test_bs_put_delta_sign_and_tolerance():
 def test_bs_put_delta_missing_inputs():
     assert formulas.bs_put_delta(0, 95, 35, 0.24) is None
     assert formulas.bs_put_delta(100, 95, 0, 0.24) is None
+
+
+def test_bs_call_delta_sign_and_parity():
+    # Put-call delta parity: delta_call - delta_put == 1 (exact BS identity).
+    put = formulas.bs_put_delta(spot=100.0, strike=95.0, dte=35, iv=0.24, r=0.04)
+    call = formulas.bs_call_delta(spot=100.0, strike=95.0, dte=35, iv=0.24, r=0.04)
+    assert call is not None
+    assert call > 0  # calls are positive
+    assert math.isclose(call - put, 1.0, rel_tol=1e-6)
+    # The native fallback obeys the same identity.
+    native_put = formulas._bs_put_delta_native(100.0, 95.0, 35, 0.24, 0.04)
+    assert math.isclose(native_put + 1.0, call, rel_tol=1e-4)
+
+
+def test_bs_call_delta_missing_inputs():
+    assert formulas.bs_call_delta(0, 95, 35, 0.24) is None
+    assert formulas.bs_call_delta(100, 95, 0, 0.24) is None
+    assert formulas.bs_call_delta(100, 95, 35, None) is None

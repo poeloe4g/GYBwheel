@@ -4,6 +4,9 @@ F04 — nearest-delta put selector (B5).
 F06 — earnings filter (B2).
 F07 — trade-quality filters (Spec 1.3, B5).
 ``evaluate_puts`` — gate-then-select over the whole delta band.
+``evaluate_call_side`` / ``attach_call_side`` — covered-call context metrics
+(advisory only: they mint fields and a ``thin_call_side`` flag, never a
+rejection).
 
 Every rejection records a human-readable reason.
 """
@@ -23,6 +26,16 @@ def _effective_abs_delta(opt: dict[str, Any], spot: float, risk_free_rate: float
         return abs(delta)
     bs = formulas.bs_put_delta(spot, opt.get("strike"), opt.get("dte"), opt.get("iv"),
                                risk_free_rate)
+    return abs(bs) if bs is not None else None
+
+
+def _effective_abs_call_delta(opt: dict[str, Any], spot: float, risk_free_rate: float) -> float | None:
+    """Call-side twin of ``_effective_abs_delta``."""
+    delta = opt.get("delta")
+    if delta is not None:
+        return abs(delta)
+    bs = formulas.bs_call_delta(spot, opt.get("strike"), opt.get("dte"), opt.get("iv"),
+                                risk_free_rate)
     return abs(bs) if bs is not None else None
 
 
@@ -153,6 +166,120 @@ def evaluate_puts(
     return {"selected": selected, "fallback": fallback,
             "n_in_band": len(evaluated), "n_qualifying": len(qualifying),
             "gate_failures": gate_failures}
+
+
+# Null shape returned when the call side can't be measured — absent calls or
+# unusable data must produce silence (no flag), never a demotion.
+_CALL_SIDE_NULL: dict[str, Any] = {
+    "call_yield_ann": None, "skew": None, "call_oi": None,
+    "call_spread_pct": None, "thin_call_side": False,
+}
+
+
+def evaluate_call_side(
+    chain: list[dict[str, Any]], spot: float, put_row: dict[str, Any],
+    call_cfg: dict[str, Any], risk_free_rate: float = 0.04,
+) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    """Covered-call context for a put candidate: ``(fields, flags)``.
+
+    The wheel's second leg: if this put is assigned, how workable is selling
+    calls on the shares? From the calls at the put's own expiration, the
+    "mirror call" nearest ``call_cfg.target_delta`` is measured:
+
+    - ``call_yield_ann`` — the mirror call's annualized premium yield on the
+      put-strike collateral (the shares' cost if assigned), directly comparable
+      to the put's ``annualized_yield``. Computed from the raw mid — this is a
+      context metric that never feeds the score, so the conservative-fill
+      premium basis is deliberately not applied.
+    - ``skew`` — put IV minus mirror-call IV; steep skew means the put leg's
+      richness is not matched on the call side.
+    - ``call_oi`` / ``call_spread_pct`` — the mirror call's liquidity.
+    - ``thin_call_side`` — True only on *definitive* evidence of a thin call
+      market: OI reported below ``min_open_interest``, or a live two-sided
+      quote whose spread exceeds BOTH ``max_spread_pct`` and
+      ``max_spread_abs`` (the same absolute-spread rescue as the put gate).
+
+    Missing calls, missing OI/IV, or indicative quotes yield null fields and no
+    flag — advisory data must never punish a name for being unmeasurable. The
+    returned flag (at most one, ``thin_call_side``) is advisory: `main`
+    excludes it from near-miss routing.
+    """
+    target = float(call_cfg.get("target_delta", 0.25))
+    best: dict[str, Any] | None = None
+    best_dist = float("inf")
+    for opt in chain:
+        if opt.get("option_type") != "call" or opt.get("expiration") != put_row.get("expiration"):
+            continue
+        ad = _effective_abs_call_delta(opt, spot, risk_free_rate)
+        if ad is None:
+            continue
+        dist = abs(ad - target)
+        if dist < best_dist:
+            best_dist = dist
+            best = opt
+
+    fields = dict(_CALL_SIDE_NULL)
+    if best is None:
+        return fields, []
+
+    mid, put_strike, dte = best.get("mid"), put_row.get("strike"), put_row.get("dte")
+    if mid and put_strike and dte:
+        fields["call_yield_ann"] = formulas.annualized_yield(mid, put_strike, dte)
+
+    # Raw put IV (or the band median): iv_used is only derived later in
+    # score.score_candidate, so the rare IV-outlier row can diverge slightly.
+    put_iv = put_row.get("iv") or put_row.get("iv_band_median")
+    call_iv = best.get("iv")
+    if put_iv is not None and call_iv is not None:
+        fields["skew"] = put_iv - call_iv
+
+    oi = best.get("open_interest")
+    fields["call_oi"] = oi
+
+    bid, ask = best.get("bid"), best.get("ask")
+    live = bid is not None and ask is not None and best.get("quote_quality", "live") == "live"
+    if live:
+        fields["call_spread_pct"] = formulas.spread_pct(bid, ask)
+
+    thin_reason: str | None = None
+    min_oi = call_cfg.get("min_open_interest")
+    if min_oi is not None and oi is not None and oi < min_oi:
+        thin_reason = f"mirror-call OI {oi} < {min_oi}"
+    elif live:
+        sp, spread_abs = fields["call_spread_pct"], ask - bid
+        if (sp > call_cfg.get("max_spread_pct", float("inf"))
+                and spread_abs > call_cfg.get("max_spread_abs", float("inf"))):
+            thin_reason = f"mirror-call spread {sp:.4f} > {call_cfg['max_spread_pct']}"
+
+    if thin_reason is None:
+        return fields, []
+    fields["thin_call_side"] = True
+    return fields, [_entry(
+        "thin_call_side",
+        f"{thin_reason} — covered calls may be hard to sell if assigned")]
+
+
+def attach_call_side(
+    result: dict[str, Any], chain: list[dict[str, Any]], spot: float,
+    call_cfg: dict[str, Any] | None, risk_free_rate: float = 0.04,
+) -> dict[str, Any]:
+    """Annotate an ``evaluate_puts`` result's selected/fallback rows with
+    call-side fields — copy-not-mutate, so selected/fallback pointing at the
+    same dict can't double-append flags.
+
+    Absent or ``enabled: false`` config is a no-op (rows simply lack the call
+    fields).
+    """
+    if not call_cfg or not call_cfg.get("enabled", True):
+        return result
+    out = dict(result)
+    for key in ("selected", "fallback"):
+        row = result.get(key)
+        if row is None:
+            continue
+        fields, flags = evaluate_call_side(chain, spot, row, call_cfg, risk_free_rate)
+        out[key] = {**row, **fields, "flags": row.get("flags", []) + flags}
+    return out
 
 
 def passes_earnings_filter(

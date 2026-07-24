@@ -47,7 +47,9 @@ def _is_rate_limited(exc: Exception) -> bool:
     return status in (429, 500, 502, 503, 504) or "429" in text or "rate" in text or "timeout" in text
 
 
-def normalize_yf_option(raw: dict[str, Any], expiration: str) -> dict[str, Any]:
+def normalize_yf_option(
+    raw: dict[str, Any], expiration: str, option_type: str = "put",
+) -> dict[str, Any]:
     """Normalize a yfinance option row into the screener's option shape.
 
     yfinance has no Greeks, so ``delta`` is left None and computed downstream by
@@ -76,7 +78,7 @@ def normalize_yf_option(raw: dict[str, Any], expiration: str) -> dict[str, Any]:
         quote_quality = "none"
     return {
         "symbol": raw.get("contractSymbol"),
-        "option_type": "put",
+        "option_type": option_type,
         "strike": _f(raw.get("strike")),
         "bid": bid,
         "ask": ask,
@@ -107,6 +109,10 @@ def normalize_yf_fundamentals(ticker: str, info: dict[str, Any]) -> dict[str, An
         "net_income": info.get("netIncomeToCommon"),
         "free_cash_flow": info.get("freeCashflow"),
         "sector": info.get("sector"),
+        # Raw pass-through: yfinance has historically flip-flopped between
+        # fraction (0.005) and percent (0.5) units for dividendYield — display
+        # it as-is, never re-render as a percent.
+        "dividend_yield": info.get("dividendYield"),
         "has_options": True if info.get("optionsTimestamp") is not None else None,
         "price": info.get("currentPrice") or info.get("regularMarketPrice"),
     }
@@ -211,20 +217,29 @@ class DataProvider:
         return dates
 
     def get_option_chain(self, ticker: str, expiration: str) -> list[dict[str, Any]]:
+        """Both sides of the chain as one flat list, tagged by ``option_type``.
+
+        yfinance returns puts and calls in the same response; the calls feed the
+        call-side context metrics (``screen.evaluate_call_side``). Namespace
+        ``chain2``: older ``chain`` records were puts-only and must never be
+        served to code expecting calls (DiskCache has no schema versioning).
+        """
         key = f"{ticker}:{expiration}"
-        cached = self.cache.get("chain", key)
+        cached = self.cache.get("chain2", key)
         if cached is not None:
             return cached
 
         import yfinance as yf
 
-        def call() -> list[dict[str, Any]]:
-            puts = yf.Ticker(ticker).option_chain(expiration).puts
-            return puts.to_dict("records")
+        def call() -> dict[str, list[dict[str, Any]]]:
+            oc = yf.Ticker(ticker).option_chain(expiration)
+            return {"puts": oc.puts.to_dict("records"),
+                    "calls": oc.calls.to_dict("records")}
 
         rows = with_backoff(call, max_retries=self.max_retries, is_transient=_is_rate_limited)
-        chain = [normalize_yf_option(o, expiration) for o in rows]
-        self.cache.set("chain", key, chain)
+        chain = [normalize_yf_option(o, expiration) for o in rows["puts"]]
+        chain += [normalize_yf_option(o, expiration, "call") for o in rows["calls"]]
+        self.cache.set("chain2", key, chain)
         return chain
 
     def get_put_candidate(
@@ -246,7 +261,7 @@ class DataProvider:
         and every returned contract carries a ``dte_stretched`` flag — visible,
         never silently treated as in-window (the flag routes to near-miss).
         """
-        from screen import evaluate_puts
+        from screen import attach_call_side, evaluate_puts
 
         all_expirations = self.get_expirations(ticker)
         expirations = [e for e in all_expirations if dte_min <= dte_for(e) <= dte_max]
@@ -275,6 +290,10 @@ class DataProvider:
             for key in ("selected", "fallback"):
                 if result[key] is not None:
                     result[key] = {**result[key], "flags": result[key]["flags"] + [flag]}
+        result = attach_call_side(
+            result, flat, spot, self.config.get("call_side"),
+            self.config.get("quality", {}).get("risk_free_rate", 0.04),
+        )
         if result["selected"] is None and result["fallback"] is None:
             result["reason"] = "no_put_in_band"
         return result
