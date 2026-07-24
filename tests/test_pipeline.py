@@ -3,6 +3,8 @@ import argparse
 import json
 from pathlib import Path
 
+import pytest
+
 from cache import DiskCache
 import main as main_mod
 import report
@@ -41,7 +43,21 @@ class FakeProvider:
             "PRICEY": {"ticker": "PRICEY", "market_cap": 5e11, "avg_volume": 5e6,
                        "net_income": 3e10, "free_cash_flow": 2.5e10,
                        "sector": "Technology", "has_options": True, "price": 1000.0},
+            # THINCALL's put is clean but its call side is illiquid (advisory
+            # flag); NOCALL has no listed calls at all (null call fields).
+            "THINCALL": {"ticker": "THINCALL", "market_cap": 5e11, "avg_volume": 5e6,
+                         "net_income": 3e10, "free_cash_flow": 2.5e10,
+                         "sector": "Energy", "has_options": True, "price": 100.0},
+            "NOCALL": {"ticker": "NOCALL", "market_cap": 5e11, "avg_volume": 5e6,
+                       "net_income": 3e10, "free_cash_flow": 2.5e10,
+                       "sector": "Utilities", "has_options": True, "price": 100.0},
+            # THINEARN: thin call side AND unknown earnings — the earnings
+            # promotion must survive the advisory flag riding along.
+            "THINEARN": {"ticker": "THINEARN", "market_cap": 5e11, "avg_volume": 5e6,
+                         "net_income": 3e10, "free_cash_flow": 2.5e10,
+                         "sector": "Financials", "has_options": True, "price": 100.0},
         }
+        self._funds["MEGA"]["dividend_yield"] = 0.006
 
     def get_price_history(self, ticker, period="1y"):
         if self.falling:
@@ -64,6 +80,12 @@ class FakeProvider:
                "mid": 0.32, "delta": -0.20, "iv": 0.24,
                "open_interest": 2500, "volume": 800, "expiration": "2099-07-18",
                "dte": 35}
+        # Every name carries a healthy ~0.25-delta mirror call unless the
+        # scenario says otherwise, so call-side context is exercised everywhere.
+        call = {"option_type": "call", "strike": 24.0, "bid": 0.28, "ask": 0.30,
+                "mid": 0.29, "delta": 0.26, "iv": 0.22,
+                "open_interest": 800, "volume": 200, "expiration": "2099-07-18",
+                "dte": 35}
         if ticker == "WIDE":  # $0.90-wide market on a $0.55 mid -> spread reject
             put.update(bid=0.10, ask=1.00, mid=0.55)
         elif ticker == "NOIV":  # feed supplies no IV -> iv_missing flag
@@ -75,26 +97,36 @@ class FakeProvider:
                 {**put, "open_interest": 5},
                 {**put, "strike": 17.0, "bid": 0.20, "ask": 0.22, "mid": 0.21,
                  "delta": -0.16, "open_interest": 3000},
+                call,
             ]
         elif ticker == "PRICEY":  # clean gates, $80k collateral per contract;
             # rich premium so its blended score beats MEGA's and the
             # prefer_affordable re-ordering is actually exercised.
             put.update(strike=800.0, bid=88.0, ask=92.0, mid=90.0)
-        return [put]
+        elif ticker in ("THINCALL", "THINEARN"):  # advisory thin_call_side flag
+            call.update(open_interest=3)
+        elif ticker == "NOCALL":  # no listed calls -> null fields, no flag
+            return [put]
+        return [put, call]
 
     def get_put_candidate(self, ticker, spot, *, quality, next_earnings=None, **kw):
         import screen
+        chain = self._chain(ticker)
         result = screen.evaluate_puts(
-            self._chain(ticker), spot,
+            chain, spot,
             target_delta=kw["target_delta"], delta_min=kw["delta_min"],
             delta_max=kw["delta_max"], quality=quality, next_earnings=next_earnings,
         )
+        # Same call-side annotation as the real DataProvider.get_put_candidate.
+        result = screen.attach_call_side(
+            result, chain, spot, self.config.get("call_side"),
+            self.config.get("quality", {}).get("risk_free_rate", 0.04))
         if result["selected"] is None and result["fallback"] is None:
             result["reason"] = "no_put_in_band"
         return result
 
     def get_next_earnings(self, ticker):
-        if ticker == "NOEARN":
+        if ticker in ("NOEARN", "THINEARN"):
             return None  # feed failure -> earnings_unknown flag
         return "2099-12-31"  # far away — never blocks
 
@@ -415,3 +447,79 @@ def test_unknown_earnings_policy_bad_value_falls_back(tmp_path, monkeypatch):
     doc = json.loads(json_out.read_text())
     assert doc["rows"] == []
     assert doc["near_misses"][0]["ticker"] == "NOEARN"
+
+
+def test_thin_call_side_never_demotes(tmp_path, monkeypatch):
+    """The core call-side guarantee: an advisory thin_call_side flag keeps the
+    row in the MAIN table (visible, counted as a flag, ranked last) — it never
+    shrinks the put output."""
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c")))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, tickers="MEGA,THINCALL", json_out=str(json_out)))
+    assert rc == 0
+    doc = json.loads(json_out.read_text())
+    # Both candidates survive; the thin-call name only sinks in the ranking
+    # (identical scores, so the prefer_two_sided tier decides the order).
+    assert [r["ticker"] for r in doc["rows"]] == ["MEGA", "THINCALL"]
+    assert doc["near_misses"] == []
+    rows = {r["ticker"]: r for r in doc["rows"]}
+    assert rows["THINCALL"]["thin_call_side"] is True
+    assert [e["code"] for e in rows["THINCALL"]["data_flags"]] == ["thin_call_side"]
+    assert rows["MEGA"]["thin_call_side"] is False
+    assert rows["MEGA"]["data_flags"] == []
+    # Advisory flags are counted as flags, never rejections.
+    assert doc["meta"]["rejections_by_reason"] == {}
+    assert doc["meta"]["flags_by_reason"] == {"thin_call_side": 1}
+    # Context fields flow through to the snapshot and the CSV.
+    assert rows["MEGA"]["call_yield_ann"] == pytest.approx(0.29 / 18.0 * 365 / 35)
+    assert rows["MEGA"]["skew"] == pytest.approx(0.02)
+    assert rows["MEGA"]["dividend_yield"] == 0.006
+    header, *lines = (tmp_path / "out.csv").read_text().splitlines()
+    for col in ("call_yield_ann", "skew", "thin_call_side", "dividend_yield"):
+        assert col in header
+    assert any("THINCALL" in ln and "thin_call_side" in ln for ln in lines)
+
+
+def test_thin_call_with_unknown_earnings_still_promotes(tmp_path, monkeypatch):
+    """policy=flag promotion must look only at gating flags: an advisory
+    thin_call_side riding alongside earnings_unknown cannot demote the row."""
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c")))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, tickers="THINEARN", json_out=str(json_out)))
+    assert rc == 0
+    doc = json.loads(json_out.read_text())
+    assert [r["ticker"] for r in doc["rows"]] == ["THINEARN"]
+    assert doc["near_misses"] == []
+    codes = {e["code"] for e in doc["rows"][0]["data_flags"]}
+    assert codes == {"earnings_unknown", "thin_call_side"}
+
+
+def test_missing_call_data_stays_silent(tmp_path, monkeypatch):
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c")))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, tickers="NOCALL", json_out=str(json_out)))
+    assert rc == 0
+    doc = json.loads(json_out.read_text())
+    row = doc["rows"][0]
+    assert row["ticker"] == "NOCALL"
+    assert row["thin_call_side"] is False
+    assert row["call_yield_ann"] is None and row["skew"] is None
+    assert row["data_flags"] == []
+    assert doc["meta"]["flags_by_reason"] == {}
+
+
+def test_near_miss_rows_carry_call_side_fields(tmp_path, monkeypatch):
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c")))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, tickers="WIDE", json_out=str(json_out)))
+    assert rc == 0
+    doc = json.loads(json_out.read_text())
+    near = doc["near_misses"][0]
+    assert near["ticker"] == "WIDE"
+    assert [e["code"] for e in near["rejection_reasons"]] == ["spread"]
+    assert near["call_yield_ann"] is not None
+    assert near["thin_call_side"] is False

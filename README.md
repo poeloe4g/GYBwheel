@@ -46,7 +46,11 @@ credentials, so no API key is required to run. All thresholds live in
    (`quote_indicative` flag, spread gate skipped); junk per-contract IVs get an
    `iv_outlier` flag instead of a bogus implied-move rejection. A clean row
    whose only flag is `earnings_unknown` reaches the main table (visibly
-   flagged) under `quality.unknown_earnings_policy: flag`.
+   flagged) under `quality.unknown_earnings_policy: flag`. The call side of
+   the same chain (fetched in the same request) feeds wheel-second-leg
+   context — `call_yield_ann`, put-call `skew`, mirror-call liquidity, and an
+   advisory `thin_call_side` flag that is **never** a gate: it cannot demote a
+   candidate or shrink the output (`call_side` section in `config.yaml`).
 5. **Size** (`size.py`) — collateral/ROC/annualized; per-name, per-sector,
    total-deployed caps. Over-cap names are flagged (`breaches_per_name_cap`,
    `affordable: false`) with `min_account_for_1_contract`, never silently
@@ -61,7 +65,9 @@ credentials, so no API key is required to run. All thresholds live in
    conservative` = halfway between bid and mid) rather than the optimistic raw
    mid; junk per-contract IVs fall back to the in-band median for the implied
    move. `scoring.prefer_affordable` ranks tradeable candidates first;
-   `prefer_live_quotes` ranks live-quote rows above last-trade-priced ones.
+   `prefer_live_quotes` ranks live-quote rows above last-trade-priced ones;
+   `prefer_two_sided` (weakest tier) ranks `thin_call_side` rows last — a
+   sanity check on the wheel's covered-call leg, never a score change.
 7. **Report** (`report.py`) — header + ranked table to console and CSV.
 8. **Outcomes** (`scripts/evaluate_outcomes.py`, run by CI) — once contracts
    expire, candidates *and* near-misses are scored (win = expired above

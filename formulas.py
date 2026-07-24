@@ -73,8 +73,23 @@ def bs_put_delta(spot: float, strike: float, dte: int, iv: float, r: float = 0.0
     return bs_delta("p", spot, strike, t, r, iv)
 
 
+def bs_call_delta(spot: float, strike: float, dte: int, iv: float, r: float = 0.04) -> float | None:
+    """Black-Scholes call delta fallback (positive). Requires py_vollib."""
+    if not spot or not strike or not iv or dte <= 0:
+        return None
+    try:
+        from py_vollib.black_scholes.greeks.analytical import delta as bs_delta
+    except ImportError:  # pragma: no cover
+        return _bs_put_delta_native(spot, strike, dte, iv, r) + 1.0
+    t = dte / 365.0
+    return bs_delta("c", spot, strike, t, r, iv)
+
+
 def _bs_put_delta_native(spot: float, strike: float, dte: int, iv: float, r: float) -> float:
-    """Closed-form fallback if py_vollib is unavailable: delta_put = N(d1) - 1."""
+    """Closed-form fallback if py_vollib is unavailable: delta_put = N(d1) - 1.
+
+    The call variant is delta_call = N(d1) = this + 1 (put-call delta parity).
+    """
     t = dte / 365.0
     d1 = (math.log(spot / strike) + (r + 0.5 * iv * iv) * t) / (iv * math.sqrt(t))
     norm_cdf = 0.5 * (1.0 + math.erf(d1 / math.sqrt(2.0)))

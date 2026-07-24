@@ -52,6 +52,19 @@ quality:
   risk_free_rate: 0.04                 # B9
   score_denominator_floor: 0.01        # B4 guard
 
+# Call-side (covered-call) context: if assigned, how good is this name for the
+# wheel's second leg? Deliberately lenient — these thresholds only mint a
+# visible thin_call_side flag (and a weakest-tier rank demotion via
+# scoring.prefer_two_sided); they NEVER gate, reject, or demote a candidate to
+# the near-miss table. Missing/indicative call data produces null fields and no
+# flag at all.
+call_side:
+  enabled: true
+  target_delta: 0.25          # the "mirror call" measured for context
+  min_open_interest: 10       # loose — calls often carry ~half the put-side OI
+  max_spread_pct: 0.25        # flag only when BOTH pct and abs spread exceed
+  max_spread_abs: 0.15        #   their limits (same rescue as the put gate)
+
 scoring:
   # risk_adjusted (default): annualized_yield x P(expires worthless) x cushion
   # in units of the expected move — expected yield, not raw yield, so a fat
@@ -60,6 +73,7 @@ scoring:
   mode: risk_adjusted
   prefer_affordable: true          # rank tradeable (affordable) candidates first
   prefer_live_quotes: true         # rank live-quote rows above last-trade-priced rows
+  prefer_two_sided: true           # rank thin_call_side rows last (weakest tier; sanity check)
   # Premium the yields/score use when a live two-sided quote exists:
   #   conservative — (bid + mid)/2, a realistic limit fill (default)
   #   bid          — worst-case fill at the bid

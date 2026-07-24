@@ -1,11 +1,14 @@
 {
   "MEGA": {"ticker": "MEGA", "market_cap": 500000000000, "avg_volume": 5000000,
            "net_income": 30000000000, "free_cash_flow": 25000000000,
-           "sector": "Technology", "has_options": true, "price": 250.0},
+           "sector": "Technology", "dividend_yield": 0.0055, "has_options": true,
+           "price": 250.0},
   "TINY": {"ticker": "TINY", "market_cap": 1000000000, "avg_volume": 200000,
            "net_income": 50000000, "free_cash_flow": 10000000,
-           "sector": "Industrials", "has_options": true, "price": 15.0},
+           "sector": "Industrials", "dividend_yield": null, "has_options": true,
+           "price": 15.0},
   "REDINK": {"ticker": "REDINK", "market_cap": 40000000000, "avg_volume": 3000000,
              "net_income": -200000000, "free_cash_flow": -50000000,
-             "sector": "Healthcare", "has_options": true, "price": 80.0}
+             "sector": "Healthcare", "dividend_yield": 0.021, "has_options": true,
+             "price": 80.0}
 }

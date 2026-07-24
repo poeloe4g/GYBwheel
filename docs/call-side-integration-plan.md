@@ -66,7 +66,7 @@ being fetched and thrown away (next section).
   integration is cheap: the chain-level metrics below need no new API
   surface, only a wider cache record.
 - `dividendYield` is one more key on the same `info` blob
-  `_normalize_fundamentals` already parses — also free.
+  `normalize_yf_fundamentals` already parses — also free.
 - Per-name price history (for drawdown/recoverability stats) **would** add
   one `history` request per universe name. That's the only genuinely new
   load, which is why it's the last, optional phase — and it belongs in the
@@ -159,3 +159,35 @@ scoring:
    flag + lower tier enough? (Plan says flag until outcomes prove more.)
 4. **Dashboard treatment:** extra columns in the candidates table, or a
    per-row expandable "call side" detail (keeps the table narrow)?
+
+## Decisions (2026-07-24) — Phase A+B implemented
+
+Guiding constraint from review: **the call-side check must never reduce the
+set of put candidates shown** — it is a sanity check, not a filter. Concretely:
+
+- **Phases A+B shipped**; C (`wheel_adjusted` score mode) and D (hard gate)
+  deferred until the outcomes data can justify them.
+- **Advisory flags, structurally unable to demote.** `thin_call_side` lives in
+  `main.ADVISORY_FLAG_CODES`: routing and the earnings-promotion logic look
+  only at *gating* flags, so a thin call side can never send a row to
+  near-miss. The flag stays in `data_flags` for badges and the outcomes
+  `by_flag_code` calibration.
+- **Lenient thresholds** (`min_open_interest: 10`, spread flagged only beyond
+  BOTH 25% and $0.15 — the same absolute-spread rescue as the put gate), and
+  the flag fires only on *definitive* evidence: missing calls, missing OI/IV,
+  or indicative (off-hours) quotes produce null fields and **no flag at all**.
+- **Weakest rank tier.** `scoring.prefer_two_sided` sorts flagged rows last
+  *within* the affordability and live-quote tiers; unmeasured call sides count
+  as clean.
+- **`call_yield_ann` uses the raw call mid** on put-strike collateral
+  (comparable to the put's `annualized_yield`); the conservative premium basis
+  is not applied — it is a context metric that never feeds the score.
+- **Skew** compares the put row's raw IV (or band median) with the mirror
+  call's IV; the score's later `iv_used` substitution can diverge in the rare
+  IV-outlier case (accepted).
+- Snapshot schema bumped to **v7** (this doc previously said v4/v6 — see
+  `report.py` for the authoritative version log); chain cache namespace bumped
+  to `chain2` and the CI actions cache key to `v3` because cached chain
+  records now carry both sides.
+- Dashboard: one context-only "Call yield" column plus the friendly
+  `thin_call_side` badge; near-miss table unchanged.

@@ -1,3 +1,5 @@
+import pytest
+
 import screen
 
 
@@ -215,3 +217,119 @@ def test_quality_recalibrated_gates_pass_low_iv_megacap(config):
     opt = {"strike": 96.0, "mid": 0.60, "dte": 35, "iv": 0.16,
            "bid": 0.55, "ask": 0.65, "open_interest": 500}
     assert screen.apply_quality_filters(opt, spot=100.0, quality=q) == ([], [])
+
+
+# --- call-side context (evaluate_call_side / attach_call_side) --------------
+# Advisory by contract: these metrics and the thin_call_side flag must never
+# reject a put or shrink the candidate set — main.py routes on gating flags
+# only. The tests below pin the "silence when unmeasurable" behavior hard.
+
+CALL_CFG = {"enabled": True, "target_delta": 0.25, "min_open_interest": 10,
+            "max_spread_pct": 0.25, "max_spread_abs": 0.15}
+
+
+def _mk_call(strike, delta, *, bid=1.15, ask=1.25, oi=800, iv=0.22,
+             exp="2099-07-18", dte=35, **extra):
+    return {"option_type": "call", "strike": strike, "bid": bid, "ask": ask,
+            "mid": (bid + ask) / 2, "delta": delta, "iv": iv,
+            "open_interest": oi, "volume": 100, "expiration": exp, "dte": dte,
+            **extra}
+
+
+def test_call_side_picks_mirror_call_and_computes_fields():
+    put = _mk_put(95.0, -0.20)
+    chain = [put, _mk_call(112.0, 0.35, iv=0.20), _mk_call(115.0, 0.26, iv=0.21),
+             _mk_call(120.0, 0.15, iv=0.23)]
+    fields, flags = screen.evaluate_call_side(chain, 110.0, put, CALL_CFG)
+    # Nearest 0.25 delta wins; yield is the call mid on the PUT-strike
+    # collateral (the shares' cost basis if assigned) — comparable to the
+    # put's own annualized_yield.
+    assert fields["call_yield_ann"] == pytest.approx(1.20 / 95.0 * 365 / 35)
+    assert fields["skew"] == pytest.approx(0.24 - 0.21)
+    assert fields["call_oi"] == 800
+    assert fields["call_spread_pct"] == pytest.approx(0.10 / 1.20)
+    assert fields["thin_call_side"] is False
+    assert flags == []
+
+
+def test_call_side_thin_by_low_oi():
+    put = _mk_put(95.0, -0.20)
+    fields, flags = screen.evaluate_call_side(
+        [put, _mk_call(115.0, 0.26, oi=3)], 110.0, put, CALL_CFG)
+    assert fields["thin_call_side"] is True
+    assert [e["code"] for e in flags] == ["thin_call_side"]
+
+
+def test_call_side_thin_spread_needs_both_thresholds():
+    put = _mk_put(95.0, -0.20)
+    # 33% spread but only $0.10 wide: rescued by max_spread_abs, not thin.
+    tight_abs = _mk_call(115.0, 0.26, bid=0.25, ask=0.35)
+    assert screen.evaluate_call_side([tight_abs], 110.0, put, CALL_CFG)[1] == []
+    # Wide in BOTH percent and dollars: thin.
+    wide = _mk_call(115.0, 0.26, bid=0.80, ask=1.60)
+    fields, flags = screen.evaluate_call_side([wide], 110.0, put, CALL_CFG)
+    assert fields["thin_call_side"] is True
+    assert [e["code"] for e in flags] == ["thin_call_side"]
+
+
+def test_call_side_indicative_quote_never_thin():
+    # Off-hours zeroed bids must not mint flags — no live market to judge.
+    put = _mk_put(95.0, -0.20)
+    indicative = _mk_call(115.0, 0.26, bid=0.80, ask=1.60,
+                          quote_quality="last_price")
+    fields, flags = screen.evaluate_call_side([indicative], 110.0, put, CALL_CFG)
+    assert fields["thin_call_side"] is False
+    assert fields["call_spread_pct"] is None
+    assert flags == []
+
+
+def test_call_side_missing_oi_never_thin():
+    put = _mk_put(95.0, -0.20)
+    fields, flags = screen.evaluate_call_side(
+        [_mk_call(115.0, 0.26, oi=None)], 110.0, put, CALL_CFG)
+    assert fields["thin_call_side"] is False
+    assert flags == []
+
+
+def test_call_side_no_calls_or_wrong_expiry_yields_nulls():
+    put = _mk_put(95.0, -0.20)
+    for chain in ([], [put], [_mk_call(115.0, 0.26, exp="2099-08-15", dte=63)]):
+        fields, flags = screen.evaluate_call_side(chain, 110.0, put, CALL_CFG)
+        assert fields == {"call_yield_ann": None, "skew": None, "call_oi": None,
+                          "call_spread_pct": None, "thin_call_side": False}
+        assert flags == []
+
+
+def test_call_side_bs_fallback_delta():
+    # No greeks feed (delta None): the BS call-delta fallback still finds the
+    # ~0.25-delta strike from iv/spot/strike/dte.
+    put = _mk_put(95.0, -0.20)
+    far = _mk_call(140.0, None, iv=0.24)
+    near = _mk_call(115.0, None, iv=0.24)
+    fields, _ = screen.evaluate_call_side([far, near], 110.0, put, CALL_CFG)
+    assert fields["call_oi"] == 800
+    assert fields["call_yield_ann"] == pytest.approx(1.20 / 95.0 * 365 / 35)
+
+
+def test_attach_call_side_annotates_selected_and_fallback(config):
+    chain = [_mk_put(95.0, -0.20), _mk_put(97.0, -0.27, oi=5),
+             _mk_call(115.0, 0.26, oi=3)]
+    res = screen.evaluate_puts(chain, 110.0, target_delta=0.20, delta_min=0.15,
+                               delta_max=0.30, quality=config["quality"],
+                               next_earnings="2099-12-31")
+    out = screen.attach_call_side(res, chain, 110.0, CALL_CFG)
+    for key in ("selected", "fallback"):
+        assert out[key]["thin_call_side"] is True
+        assert [e["code"] for e in out[key]["flags"]].count("thin_call_side") == 1
+    # Copy-not-mutate: the original result rows are untouched.
+    assert "thin_call_side" not in res["selected"]
+
+
+def test_attach_call_side_disabled_or_absent_is_noop(config):
+    chain = [_mk_put(95.0, -0.20), _mk_call(115.0, 0.26)]
+    res = screen.evaluate_puts(chain, 110.0, target_delta=0.20, delta_min=0.15,
+                               delta_max=0.30, quality=config["quality"],
+                               next_earnings="2099-12-31")
+    assert screen.attach_call_side(res, chain, 110.0, None) is res
+    assert screen.attach_call_side(res, chain, 110.0,
+                                   {**CALL_CFG, "enabled": False}) is res

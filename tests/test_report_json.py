@@ -186,3 +186,45 @@ def test_build_index_marks_demo_runs(tmp_path):
     )
     index = index_mod.build_index(tmp_path)
     assert index["runs"][0]["demo"] is True
+
+
+def test_write_json_publishes_call_side_thresholds(tmp_path):
+    config = {**_CONFIG, "call_side": {
+        "enabled": True, "target_delta": 0.30, "min_open_interest": 25,
+        "max_spread_pct": 0.20, "max_spread_abs": 0.10}}
+    out = report_mod.write_json(
+        _header(), [], _Regime(), config, tmp_path / "run.json",
+        generated_at=datetime(2026, 7, 24, 18, 0, tzinfo=timezone.utc),
+    )
+    doc = json.loads(out.read_text())
+    assert doc["thresholds"]["call_side"] == {
+        "enabled": True, "target_delta": 0.30, "min_open_interest": 25,
+        "max_spread_pct": 0.20, "max_spread_abs": 0.10}
+
+
+def test_write_json_call_side_absent_reports_disabled(tmp_path):
+    # No call_side section (e.g. an older config): the feature is off, and the
+    # echo must say so rather than advertising the code defaults as active.
+    out = report_mod.write_json(
+        _header(), [], _Regime(), _CONFIG, tmp_path / "run.json",
+        generated_at=datetime(2026, 7, 24, 18, 0, tzinfo=timezone.utc),
+    )
+    doc = json.loads(out.read_text())
+    assert doc["thresholds"]["call_side"]["enabled"] is False
+
+
+def test_write_json_call_side_row_fields_roundtrip(tmp_path):
+    rows = [{"ticker": "AAA", "score": 2.0, "call_yield_ann": 0.17,
+             "skew": 0.02, "call_oi": 800, "call_spread_pct": 0.08,
+             "thin_call_side": False, "dividend_yield": 0.006,
+             "data_flags": [{"code": "thin_call_side", "message": "x"}]}]
+    out = report_mod.write_json(
+        _header(), rows, _Regime(), _CONFIG, tmp_path / "run.json",
+        generated_at=datetime(2026, 7, 24, 18, 0, tzinfo=timezone.utc),
+    )
+    row = json.loads(out.read_text())["rows"][0]
+    assert row["call_yield_ann"] == 0.17
+    assert row["skew"] == 0.02
+    assert row["thin_call_side"] is False
+    assert row["dividend_yield"] == 0.006
+    assert row["data_flags"][0]["code"] == "thin_call_side"

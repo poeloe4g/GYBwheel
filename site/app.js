@@ -61,6 +61,7 @@ const FRIENDLY_CODE = {
   spread_unknown: "No live quote",
   oi_unknown: "No liquidity data",
   quote_indicative: "Price from last trade, not a live quote",
+  thin_call_side: "Call side thinly traded",
   universe: "Failed company-quality screen",
   no_spot: "No stock price",
   delta_band: "Odds outside the target band",
@@ -303,13 +304,14 @@ function renderTable() {
       <td class="num">${fmtUsd(r._cash_needed)}</td>
       <td class="num">${fmtPct0(r._pop)}</td>
       <td class="num">${fmtPct(r.annualized_yield)}</td>
+      <td class="num">${fmtPct(r.call_yield_ann)}</td>
       <td class="num">${fmtPct(r.distance_to_strike)}</td>
       <td class="num">${fmtNum(r.score, 3)}</td>
       <td class="num">${r.max_contracts ?? ""}</td>
       <td>${flag}</td>
       <td>${select}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="14" class="muted">No ideas passed every safety check today. Check the near misses below to see what almost made it.</td></tr>`;
+  }).join("") || `<tr><td colspan="15" class="muted">No ideas passed every safety check today. Check the near misses below to see what almost made it.</td></tr>`;
 }
 
 function wireSelectButtons() {

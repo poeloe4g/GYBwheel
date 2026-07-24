@@ -206,3 +206,105 @@ def test_cache_roundtrip_and_date_keying(tmp_path):
     assert c.get("ns", "key", stamp="2026-01-01") == {"a": 1}
     # Different stamp (day) is a miss.
     assert c.get("ns", "key", stamp="2026-01-02") is None
+
+
+def test_normalize_yf_option_call_type():
+    raw = {"contractSymbol": "XYZ250718C00115000", "strike": 115.0,
+           "bid": 1.15, "ask": 1.25, "impliedVolatility": 0.22, "openInterest": 800}
+    opt = data.normalize_yf_option(raw, "2099-07-18", "call")
+    assert opt["option_type"] == "call"
+    assert opt["mid"] == 1.20
+
+
+def test_normalize_yf_fundamentals_dividend_yield_passthrough():
+    info = {"marketCap": 3e12, "dividendYield": 0.0055}
+    assert data.normalize_yf_fundamentals("MEGA", info)["dividend_yield"] == 0.0055
+    assert data.normalize_yf_fundamentals("MEGA", {})["dividend_yield"] is None
+
+
+def test_get_option_chain_keeps_both_sides(tmp_path, monkeypatch):
+    import sys
+    import types
+
+    class _DF:
+        def __init__(self, records):
+            self._records = records
+
+        def to_dict(self, orient):
+            assert orient == "records"
+            return self._records
+
+    class _ChainTicker:
+        calls_made = 0
+
+        def __init__(self, symbol):
+            self.symbol = symbol
+
+        def option_chain(self, expiration):
+            _ChainTicker.calls_made += 1
+            return types.SimpleNamespace(
+                puts=_DF([{"contractSymbol": "P", "strike": 95.0, "bid": 0.95,
+                           "ask": 1.05}]),
+                calls=_DF([{"contractSymbol": "C", "strike": 115.0, "bid": 1.15,
+                            "ask": 1.25}]),
+            )
+
+    monkeypatch.setitem(sys.modules, "yfinance",
+                        types.SimpleNamespace(Ticker=_ChainTicker))
+    provider = data.DataProvider({"data": {"cache_dir": str(tmp_path),
+                                           "max_retries": 0}}, None)
+    chain = provider.get_option_chain("XYZ", "2099-07-18")
+    assert [o["option_type"] for o in chain] == ["put", "call"]
+    # One HTTP fetch served both sides; namespace chain2 (old puts-only
+    # "chain" records must never be read); second call is a cache hit.
+    assert _ChainTicker.calls_made == 1
+    assert provider.cache.get("chain2", "XYZ:2099-07-18") == chain
+    assert provider.cache.get("chain", "XYZ:2099-07-18") is None
+    assert provider.get_option_chain("XYZ", "2099-07-18") == chain
+    assert _ChainTicker.calls_made == 1
+
+
+def test_get_put_candidate_attaches_call_side(tmp_path):
+    from datetime import date, timedelta
+
+    exp = (date.today() + timedelta(days=35)).isoformat()
+
+    class _Provider(data.DataProvider):
+        def get_expirations(self, ticker):
+            return [exp]
+
+        def get_option_chain(self, ticker, expiration):
+            base = {"expiration": expiration, "dte": data.dte_for(expiration),
+                    "iv": 0.24, "volume": 100}
+            return [
+                {**base, "option_type": "put", "strike": 92.0, "bid": 1.0,
+                 "ask": 1.1, "mid": 1.05, "delta": -0.20, "open_interest": 500},
+                {**base, "option_type": "call", "strike": 115.0, "bid": 1.15,
+                 "ask": 1.25, "mid": 1.20, "delta": 0.26, "open_interest": 3},
+            ]
+
+    quality = {"min_yield_30dte": 0.005, "max_implied_move": 0.15,
+               "max_spread_pct": 0.15, "max_spread_abs": 0.10,
+               "min_open_interest": 50, "min_distance_to_strike": 0.03,
+               "avoid_earnings_before_expiry": True, "iv_outlier_mult": 2.5}
+    call_side = {"enabled": True, "target_delta": 0.25, "min_open_interest": 10,
+                 "max_spread_pct": 0.25, "max_spread_abs": 0.15}
+    p = _Provider({"data": {"cache_dir": str(tmp_path)}, "quality": quality,
+                   "call_side": call_side}, None)
+    res = p.get_put_candidate("X", 110.0, dte_min=30, dte_max=45,
+                              target_delta=0.20, delta_min=0.15, delta_max=0.30,
+                              quality=quality, next_earnings="2099-12-31")
+    sel = res["selected"]
+    assert sel["call_oi"] == 3
+    assert sel["thin_call_side"] is True
+    assert any(e["code"] == "thin_call_side" for e in sel["flags"])
+    assert sel["call_yield_ann"] is not None
+
+    # Feature off: rows simply lack the call fields.
+    p2 = _Provider({"data": {"cache_dir": str(tmp_path / "off")},
+                    "quality": quality}, None)
+    res2 = p2.get_put_candidate("X", 110.0, dte_min=30, dte_max=45,
+                                target_delta=0.20, delta_min=0.15,
+                                delta_max=0.30, quality=quality,
+                                next_earnings="2099-12-31")
+    assert "thin_call_side" not in res2["selected"]

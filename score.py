@@ -83,6 +83,7 @@ def rank(
     rows: list[dict[str, Any]], *,
     prefer_affordable: bool = False,
     prefer_live_quotes: bool = False,
+    prefer_two_sided: bool = False,
 ) -> list[dict[str, Any]]:
     """Sort by score, with optional actionability tiers ranked first.
 
@@ -93,6 +94,12 @@ def rank(
     ``prefer_live_quotes``: a row whose premium came from the last trade
     instead of a live two-sided market (``quote_quality != "live"``) has a
     less trustworthy score, so live-quote rows rank first within a tier.
+
+    ``prefer_two_sided``: rows flagged ``thin_call_side`` (the wheel's second
+    leg looks hard to sell — ``screen.evaluate_call_side``) rank below clean
+    rows. Deliberately the WEAKEST tier: a sanity check, not a driver, and a
+    missing/unmeasured call side counts as clean so absent data never sinks a
+    row.
     """
     def key(r: dict[str, Any]) -> tuple:
         k: list[Any] = []
@@ -100,6 +107,8 @@ def rank(
             k.append(not r.get("affordable", False))
         if prefer_live_quotes:
             k.append(r.get("quote_quality", "live") != "live")
+        if prefer_two_sided:
+            k.append(bool(r.get("thin_call_side") or False))
         k.append(-r.get("score", 0.0))
         return tuple(k)
 
