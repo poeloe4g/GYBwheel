@@ -1,0 +1,42 @@
+name: CI
+
+# Gate the test suite and the JS<->Python parity check on every push and PR, so
+# a regression can't reach main (or a scheduled screener run) while green. The
+# publish workflow in screen.yml runs the screener but never the tests — this is
+# the safety net that guards it.
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -q
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify dashboard math matches Python
+        run: node scripts/check_verify_parity.mjs
