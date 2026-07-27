@@ -222,6 +222,70 @@ def test_capital_override_flows_through_run(tmp_path, monkeypatch, capsys):
     assert row["max_contracts"] == 0
 
 
+def test_dashboard_blacklist_flows_through_run(tmp_path, monkeypatch):
+    """A blacklist entry in selections.json excludes the name end-to-end, is
+    counted under its own code, and is echoed into the snapshot."""
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c"), falling=False))
+    sel_path = tmp_path / "selections.json"
+    sel_path.write_text(json.dumps({
+        "schema_version": 2,
+        "blacklist": [{"ticker": "BAN", "reason": "burned me in March",
+                       "added": "2026-07-27"}],
+        "selections": [], "summary": None}))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, tickers="MEGA,BAN", json_out=str(json_out),
+                            selections=str(sel_path)))
+    assert rc == 0
+    doc = json.loads(json_out.read_text())
+
+    assert {r["ticker"] for r in doc["rows"]} == {"MEGA"}
+    assert "BAN" not in {r["ticker"] for r in doc["near_misses"]}
+    # Its own code — NOT folded into the generic "universe" bucket.
+    assert doc["meta"]["rejections_by_reason"]["blacklisted"] == 1
+    assert "universe" not in doc["meta"]["rejections_by_reason"]
+    # Echoed so the dashboard can render the list without re-reading config.
+    published = doc["thresholds"]["universe"]["blacklist"]
+    assert [e["ticker"] for e in published] == ["BAN"]
+    assert published[0]["reason"] == "burned me in March"
+    assert doc["thresholds"]["universe"]["blacklist_expired"] == []
+
+
+def test_expired_blacklist_entry_does_not_exclude_but_is_published(tmp_path, monkeypatch):
+    """A ban whose review date has passed releases itself, and stays visible so
+    the dashboard can offer to remove or extend it."""
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c"), falling=False))
+    sel_path = tmp_path / "selections.json"
+    sel_path.write_text(json.dumps({
+        "schema_version": 2,
+        "blacklist": [{"ticker": "BAN", "reason": "temporary", "review_after": "2000-01-01"}],
+        "selections": [], "summary": None}))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, tickers="BAN", json_out=str(json_out),
+                            selections=str(sel_path)))
+    assert rc == 0
+    doc = json.loads(json_out.read_text())
+    assert {r["ticker"] for r in doc["rows"]} == {"BAN"}
+    assert doc["thresholds"]["universe"]["blacklist"] == []
+    assert [e["ticker"] for e in doc["thresholds"]["universe"]["blacklist_expired"]] == ["BAN"]
+
+
+def test_malformed_dashboard_blacklist_never_breaks_a_run(tmp_path, monkeypatch):
+    """Fail open: a bad write from the dashboard must not empty the universe."""
+    monkeypatch.setattr(main_mod, "DataProvider",
+                        lambda c, s, cache=None: FakeProvider(c, s, DiskCache(tmp_path / "c"), falling=False))
+    sel_path = tmp_path / "selections.json"
+    sel_path.write_text(json.dumps({
+        "schema_version": 2, "blacklist": "MEGA", "selections": [], "summary": None}))
+    json_out = tmp_path / "run.json"
+    rc = main_mod.run(_args(tmp_path, tickers="MEGA", json_out=str(json_out),
+                            selections=str(sel_path)))
+    assert rc == 0
+    doc = json.loads(json_out.read_text())
+    assert {r["ticker"] for r in doc["rows"]} == {"MEGA"}
+
+
 def test_market_session_from_utc():
     from datetime import datetime, timezone
 

@@ -17,7 +17,17 @@ universe:
   require_profitable: true
   require_positive_fcf: true
   require_options: true
-  ban_list: []                  # tickers to always exclude
+  # Names never to screen. Maintain this from the dashboard ("Exclude" on any
+  # row) — that list lives in site/data/selections.json and is unioned with this
+  # one at runtime, winning on conflict. Entries here may be bare tickers or
+  # dicts; a review_after date releases the ban by itself once it passes:
+  #   ban_list:
+  #     - PLTR
+  #     - {ticker: XYZ, reason: "burned me in March", added: 2026-07-27,
+  #        review_after: 2027-01-01}
+  # Edits take effect on the very next run in both directions (add and remove);
+  # the weekly universe cache deliberately does not key on this list.
+  ban_list: []
   allow_list: []                # optional: if non-empty, restrict to these
 
 dte:

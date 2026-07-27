@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import blacklist
+
 # Versions are additive; readers must treat newer fields as optional and never
 # gate on the version number.
 #   v2: top-level ``near_misses``, ``meta.near_miss_count``,
@@ -48,7 +50,14 @@ from typing import Any
 #       ``dividend_yield``; ``data_flags`` may include the advisory
 #       ``thin_call_side`` code (advisory flags never route rows to
 #       near-miss); ``thresholds.call_side`` echoes the call_side config.
-SCHEMA_VERSION = 7
+#   v8: ``thresholds.universe`` — the fundamental gates, the allow list, and the
+#       blacklist actually in force for the run. ``blacklist`` carries the
+#       active entries ({ticker, reason, added, review_after}); the separate
+#       ``blacklist_expired`` carries entries whose ``review_after`` has passed,
+#       which no longer exclude anything and are kept only so the dashboard can
+#       offer to remove or extend them. ``rejections_by_reason`` may now contain
+#       the ``blacklisted`` code, previously folded into ``universe``.
+SCHEMA_VERSION = 8
 
 CSV_COLUMNS = [
     "ticker", "sector", "expiration", "dte", "strike", "mid", "premium_used",
@@ -170,6 +179,10 @@ def write_json(
     now = generated_at or datetime.now(timezone.utc)
     quality = config.get("quality", {})
     call_side = config.get("call_side") or {}
+    universe_cfg = config.get("universe") or {}
+    # Normalized here rather than threaded in from main: normalize() is pure, so
+    # echoing it re-derives exactly what universe.build_universe filtered on.
+    blacklist_active, blacklist_expired = blacklist.normalize(universe_cfg.get("ban_list", []))
     near_misses = near_misses or []
     meta = {
         "generated_at": now.isoformat(timespec="seconds"),
@@ -217,6 +230,19 @@ def write_json(
                 "min_open_interest": call_side.get("min_open_interest", 10),
                 "max_spread_pct": call_side.get("max_spread_pct", 0.25),
                 "max_spread_abs": call_side.get("max_spread_abs", 0.15),
+            },
+            # The universe gates plus the blacklist actually in force for this
+            # run, so the dashboard can render the exclusion list (and flag
+            # entries whose review date has passed) without re-reading config.
+            "universe": {
+                "min_market_cap": universe_cfg.get("min_market_cap"),
+                "min_avg_volume": universe_cfg.get("min_avg_volume"),
+                "require_profitable": universe_cfg.get("require_profitable"),
+                "require_positive_fcf": universe_cfg.get("require_positive_fcf"),
+                "require_options": universe_cfg.get("require_options"),
+                "allow_list": list(universe_cfg.get("allow_list") or []),
+                "blacklist": list(blacklist_active.values()),
+                "blacklist_expired": blacklist_expired,
             },
         },
         "rows": rows,

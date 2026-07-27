@@ -37,17 +37,87 @@ def test_megacap_passes_others_dropped(tmp_path, config):
     assert all(r["code"] == "universe" and r["message"] for r in rejects)
 
 
+def _banned(config, entries):
+    return {**config, "universe": {**config["universe"], "ban_list": entries}}
+
+
 def test_ban_list_drops_name(tmp_path, config):
-    cfg = {**config, "universe": {**config["universe"], "ban_list": ["MEGA"]}}
+    provider = _provider(tmp_path)
+    passing, rejects = build_universe(["MEGA"], provider, _banned(config, ["MEGA"]))
+    assert passing == []
+    # Its own code, so the dashboard never calls a name you banned a quality failure.
+    assert rejects[0]["code"] == "blacklisted"
+    assert rejects[0]["message"] == "blacklisted"
+
+
+def test_ban_list_reason_reaches_the_reject(tmp_path, config):
+    cfg = _banned(config, [
+        {"ticker": "MEGA", "reason": "burned me in March", "review_after": "2099-01-01"},
+    ])
+    provider = _provider(tmp_path)
+    _, rejects = build_universe(["MEGA"], provider, cfg)
+    assert rejects[0]["message"] == "blacklisted: burned me in March (review after 2099-01-01)"
+
+
+def test_ban_list_applies_on_cache_hit(tmp_path, config):
+    """The regression that motivated this: a ban was a no-op until the cache expired."""
+    provider = _provider(tmp_path)
+    passing, _ = build_universe(["MEGA"], provider, config)
+    assert {p["ticker"] for p in passing} == {"MEGA"}  # cache now warm
+
+    passing, rejects = build_universe(["MEGA"], provider, _banned(config, ["MEGA"]))
+    assert passing == []
+    assert rejects[0]["code"] == "blacklisted"
+
+
+def test_unban_restores_name_on_cache_hit_without_refetch(tmp_path, config):
+    """Un-banning must be just as instant, and must not cost a refetch."""
+    provider = _provider(tmp_path)
+    build_universe(["MEGA"], provider, _banned(config, ["MEGA"]))
+
+    provider.calls.clear()
+    passing, rejects = build_universe(["MEGA"], provider, config)
+    assert {p["ticker"] for p in passing} == {"MEGA"}
+    assert rejects == []
+    # The cache holds the UNFILTERED screen, so the name comes straight back.
+    assert provider.calls == []
+
+
+def test_expired_review_date_releases_the_ban(tmp_path, config):
+    cfg = _banned(config, [{"ticker": "MEGA", "reason": "temporary", "review_after": "2000-01-01"}])
     provider = _provider(tmp_path)
     passing, rejects = build_universe(["MEGA"], provider, cfg)
-    assert passing == []
-    assert rejects[0]["message"] == "on ban list"
+    assert {p["ticker"] for p in passing} == {"MEGA"}
+    assert rejects == []
+
+
+def test_blacklisted_name_that_also_fails_fundamentals_is_reported_once(tmp_path, config):
+    provider = _provider(tmp_path)
+    _, rejects = build_universe(["TINY"], provider, _banned(config, ["TINY"]))
+    assert [r["code"] for r in rejects] == ["blacklisted"]
+
+
+def test_malformed_ban_list_excludes_nothing(tmp_path, config):
+    """Fail open: a bad list must never silently empty the universe."""
+    cfg = _banned(config, ["", {"reason": "no ticker"}, 42, None])
+    provider = _provider(tmp_path)
+    passing, _ = build_universe(["MEGA"], provider, cfg)
+    assert {p["ticker"] for p in passing} == {"MEGA"}
 
 
 def test_allow_list_restricts(tmp_path, config):
     cfg = {**config, "universe": {**config["universe"], "allow_list": ["MEGA"]}}
     provider = _provider(tmp_path)
+    passing, _ = build_universe(["MEGA", "TINY"], provider, cfg)
+    assert {p["ticker"] for p in passing} == {"MEGA"}
+
+
+def test_allow_list_change_invalidates_cache(tmp_path, config):
+    """Unlike the ban list, the allow list decides what gets fetched — so it IS
+    part of the cache key, or a narrowed list would serve a stale wide screen."""
+    provider = _provider(tmp_path)
+    build_universe(["MEGA", "TINY"], provider, config)
+    cfg = {**config, "universe": {**config["universe"], "allow_list": ["MEGA"]}}
     passing, _ = build_universe(["MEGA", "TINY"], provider, cfg)
     assert {p["ticker"] for p in passing} == {"MEGA"}
 
