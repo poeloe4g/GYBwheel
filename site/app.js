@@ -63,6 +63,7 @@ const FRIENDLY_CODE = {
   quote_indicative: "Price from last trade, not a live quote",
   thin_call_side: "Call side thinly traded",
   universe: "Failed company-quality screen",
+  blacklisted: "You excluded this stock",
   no_spot: "No stock price",
   delta_band: "Odds outside the target band",
   expired: "Already expired",
@@ -294,7 +295,7 @@ function renderTable() {
     const select = (r.max_contracts ?? 0) >= 1
       ? `<button type="button" class="btn-select" data-rank="${r._rank}">Select</button>`
       : `<span class="muted" title="One contract already needs more cash than your limits allow.">—</span>`;
-    return `<tr>
+    return `<tr${excludedRowAttrs(r.ticker)}>
       <td>${r.ticker ?? ""}</td>
       <td>${r.sector ?? ""}</td>
       <td>${r.expiration ?? ""}</td>
@@ -310,8 +311,29 @@ function renderTable() {
       <td class="num">${r.max_contracts ?? ""}</td>
       <td>${flag}</td>
       <td>${select}</td>
+      <td>${excludeButton(r.ticker)}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="15" class="muted">No ideas passed every safety check today. Check the near misses below to see what almost made it.</td></tr>`;
+  }).join("") || `<tr><td colspan="16" class="muted">No ideas passed every safety check today. Check the near misses below to see what almost made it.</td></tr>`;
+}
+
+// This snapshot was screened before you excluded anything today, so an
+// already-excluded name is still sitting in it. Mark the row now rather than
+// leaving it looking tradeable until tomorrow's run drops it.
+function isExcluded(ticker) {
+  return typeof GYBTrack !== "undefined" && GYBTrack.isExcluded(ticker);
+}
+
+function excludedRowAttrs(ticker) {
+  return isExcluded(ticker)
+    ? ` class="row-excluded" title="You excluded ${ticker} — it drops out from the screener's next run."`
+    : "";
+}
+
+function excludeButton(ticker) {
+  if (!ticker || typeof GYBTrack === "undefined" || !GYBTrack.canWrite()) return "";
+  return isExcluded(ticker)
+    ? `<span class="muted" title="Already excluded. Manage the list under 'My picks'.">excluded</span>`
+    : `<button type="button" class="btn-exclude" data-ticker="${ticker}">Exclude…</button>`;
 }
 
 function wireSelectButtons() {
@@ -320,6 +342,12 @@ function wireSelectButtons() {
     if (!btn) return;
     const row = tableState.rows.find((r) => r._rank === Number(btn.dataset.rank));
     if (row && typeof GYBTrack !== "undefined") GYBTrack.openSelectModal(row);
+  });
+  ["#candidates tbody", "#near-misses tbody"].forEach((sel) => {
+    $(sel).addEventListener("click", (ev) => {
+      const btn = ev.target.closest(".btn-exclude");
+      if (btn && typeof GYBTrack !== "undefined") GYBTrack.openExcludeModal(btn.dataset.ticker);
+    });
   });
 }
 
@@ -340,7 +368,7 @@ function renderNearMisses(doc) {
   const section = $("#near-miss-section");
   if (!rows.length) { section.classList.add("hidden"); return; }
   section.classList.remove("hidden");
-  $("#near-misses tbody").innerHTML = rows.map((r) => `<tr>
+  $("#near-misses tbody").innerHTML = rows.map((r) => `<tr${excludedRowAttrs(r.ticker)}>
       <td>${r.ticker ?? ""}</td>
       <td>${r.sector ?? ""}</td>
       <td>${r.expiration ?? ""}</td>
@@ -351,6 +379,7 @@ function renderNearMisses(doc) {
       <td class="num">${fmtPct(r.distance_to_strike)}</td>
       <td class="num">${fmtNum(r.score, 3)}</td>
       <td>${(r.rejection_reasons || []).map(badge("badge-reject")).join("")}${(r.data_flags || []).map(badge("badge-flag")).join("")}</td>
+      <td>${excludeButton(r.ticker)}</td>
     </tr>`).join("");
 }
 

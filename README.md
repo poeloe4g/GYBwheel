@@ -35,7 +35,17 @@ credentials, so no API key is required to run. All thresholds live in
 2. **Positions** (`size.py`) — loads `positions.yaml` for current deployed
    capital; absent ⇒ greenfield, stated in the header.
 3. **Universe** (`universe.py`) — 1.1 fundamental filters + ban/allow list,
-   cached weekly.
+   cached weekly. The two exclusion lists sit on either side of that cache on
+   purpose. `allow_list` is config-only and decides what gets fetched, so it
+   prefilters and is part of the cache key. `ban_list` — the blacklist — is
+   maintained from the dashboard and is applied *after* every cache read, so
+   the cache holds the unfiltered screen and edits take effect on the next run
+   in **both** directions: excluding a name and putting it back are equally
+   instant, with no refetch. Entries are bare tickers or
+   `{ticker, reason, added, review_after}`, where `review_after` releases a
+   temporary exclusion by itself once the date arrives (see `blacklist.py`).
+   Excluded names are reported under their own `blacklisted` rejection code,
+   never as a company-quality failure.
 4. **Select + filter** (`screen.evaluate_puts`) — every put in the delta band
    (`abs(delta)`; Black-Scholes fallback when greeks are absent) is gated
    first — earnings avoidance against each contract's own expiration, plus
@@ -135,8 +145,18 @@ in lay terms (the machine codes stay in hover tooltips).
   screener sizes with the override from its next run, falling back to
   `config.yaml` when no override is set. Invalid values are ignored with a
   warning — a bad override never breaks a run.
+- **Exclude a stock:** "Exclude…" on any candidate or near-miss row records the
+  name in the selections file's `blacklist` block with the reason and an
+  optional review date; "Excluded stocks…" (My picks) lists them and removes
+  them again. The row greys out immediately and the screener skips the name
+  from its next run. The list unions with `config.yaml`'s `universe.ban_list`
+  and wins on conflict. Entries whose review date has passed stop excluding
+  anything but stay listed (marked *lapsed*) so you can remove or extend them
+  rather than lose the note. Malformed entries are ignored with a warning: the
+  blacklist fails open, because one that failed closed would silently empty the
+  universe and the run would merely look quiet.
 
-`main.py --json-out PATH` writes one self-contained run snapshot (schema v4 —
+`main.py --json-out PATH` writes one self-contained run snapshot (schema v8 —
 versions are additive and readers never gate on the number; the field list is
 documented in `report.py`). `scripts/build_index.py` rebuilds
 `site/data/index.json` + `latest.json` from `site/data/runs/*.json`;

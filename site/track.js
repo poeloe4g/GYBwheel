@@ -605,6 +605,162 @@ const GYBTrack = (() => {
     }
   }
 
+  // ------------------------------------------------------------- blacklist
+  // Mirrors blacklist.normalize in Python: bare strings and dicts both count,
+  // and an entry whose review_after has arrived no longer excludes anything.
+  // Kept in sync by test_verify_parity's sibling rule — the screener is the
+  // authority, this is only so the page doesn't lie between runs.
+  const todayIso = () => new Date().toISOString().slice(0, 10);
+
+  function entryTicker(entry) {
+    if (typeof entry === "string") return entry.trim().toUpperCase();
+    if (entry && typeof entry === "object" && typeof entry.ticker === "string") {
+      return entry.ticker.trim().toUpperCase();
+    }
+    return "";
+  }
+
+  function normalizeEntry(entry) {
+    const ticker = entryTicker(entry);
+    if (!ticker) return null;
+    const src = (entry && typeof entry === "object") ? entry : {};
+    const review = /^\d{4}-\d{2}-\d{2}$/.test(String(src.review_after || ""))
+      ? String(src.review_after) : null;
+    return {
+      ticker,
+      reason: String(src.reason || "").trim(),
+      added: src.added || null,
+      review_after: review,
+      expired: Boolean(review) && review <= todayIso(),
+    };
+  }
+
+  function exclusions() {
+    const raw = (state.doc || {}).blacklist;
+    if (!Array.isArray(raw)) return [];
+    const byTicker = new Map();
+    raw.map(normalizeEntry).filter(Boolean).forEach((e) => byTicker.set(e.ticker, e));
+    return [...byTicker.values()];
+  }
+
+  const activeExclusions = () => exclusions().filter((e) => !e.expired);
+
+  function isExcluded(ticker) {
+    if (!ticker) return false;
+    const sym = String(ticker).trim().toUpperCase();
+    return activeExclusions().some((e) => e.ticker === sym);
+  }
+
+  // Re-render the screener tables so an excluded row greys out immediately,
+  // the way the capital cards update before the next run catches up.
+  function refreshScreenerTables() {
+    if (!window.__currentRun) return;
+    if (typeof renderTable === "function") renderTable();
+    if (typeof renderNearMisses === "function") renderNearMisses(window.__currentRun);
+  }
+
+  function monthsFromNow(months) {
+    const d = new Date();
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function openExcludeModal(ticker) {
+    const sym = String(ticker || "").trim().toUpperCase();
+    if (!sym || !state.writable) return;
+    $("#exc-title").textContent = `Never screen ${sym}`;
+    $("#exc-reason").value = "";
+    $("#exc-review").value = "";
+    $("#exc-error").classList.add("hidden");
+    $("#exclude-dialog").dataset.ticker = sym;
+    $("#exclude-dialog").showModal();
+  }
+
+  async function confirmExclude() {
+    const sym = $("#exclude-dialog").dataset.ticker;
+    const errEl = $("#exc-error");
+    const reason = $("#exc-reason").value.trim();
+    const review = $("#exc-review").value;
+    if (review && review <= todayIso()) {
+      errEl.textContent = "That review date is already past, so it would not exclude anything. " +
+        "Pick a future date, or leave it empty to exclude for good.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+    const btn = $("#exc-confirm");
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    try {
+      await saveSelections((doc) => {
+        doc.schema_version = Math.max(doc.schema_version || 1, 2);
+        const list = Array.isArray(doc.blacklist) ? doc.blacklist : [];
+        // In-place patch, so re-applying to fresher content after a stale-sha
+        // retry stays correct.
+        const next = list.filter((e) => entryTicker(e) !== sym);
+        next.push({
+          ticker: sym,
+          ...(reason ? { reason } : {}),
+          added: todayIso(),
+          ...(review ? { review_after: review } : {}),
+        });
+        doc.blacklist = next;
+      }, `blacklist: exclude ${sym}`);
+      $("#exclude-dialog").close();
+      refreshScreenerTables();
+      setPicksStatus(`${sym} excluded ✓ — the screener skips it from its next run` +
+        (review ? `, until ${review}.` : "."));
+    } catch (e) {
+      errEl.textContent = `Could not save: ${e.message} — nothing was changed.`;
+      errEl.classList.remove("hidden");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Exclude";
+    }
+  }
+
+  function renderExcludedList() {
+    const entries = [...exclusions()].sort((a, b) => a.ticker.localeCompare(b.ticker));
+    $("#exl-empty").classList.toggle("hidden", entries.length > 0);
+    $("#excluded-list tbody").innerHTML = entries.map((e) => {
+      const review = e.review_after
+        ? (e.expired
+          ? `<span class="badge-flag" title="This review date has passed, so ${esc(e.ticker)} is being screened again. Remove it to tidy the list, or set a new date.">${esc(e.review_after)} — lapsed</span>`
+          : esc(e.review_after))
+        : `<span class="muted">never</span>`;
+      return `<tr${e.expired ? ` class="row-excluded"` : ""}>
+        <td>${esc(e.ticker)}</td>
+        <td>${e.reason ? esc(e.reason) : `<span class="muted">no reason recorded</span>`}</td>
+        <td>${e.added ? esc(String(e.added).slice(0, 10)) : `<span class="muted">—</span>`}</td>
+        <td>${review}</td>
+        <td><button type="button" class="btn-select btn-unexclude" data-ticker="${esc(e.ticker)}">Remove</button></td>
+      </tr>`;
+    }).join("");
+  }
+
+  function openExcludedModal() {
+    $("#exl-error").classList.add("hidden");
+    renderExcludedList();
+    $("#excluded-dialog").showModal();
+  }
+
+  async function removeExclusion(ticker) {
+    const sym = String(ticker || "").trim().toUpperCase();
+    const errEl = $("#exl-error");
+    try {
+      await saveSelections((doc) => {
+        const list = Array.isArray(doc.blacklist) ? doc.blacklist : [];
+        doc.blacklist = list.filter((e) => entryTicker(e) !== sym);
+      }, `blacklist: stop excluding ${sym}`);
+      renderExcludedList();
+      refreshScreenerTables();
+      setPicksStatus(`${sym} is back in the running — the screener considers it again ` +
+        `from its next run.`);
+    } catch (e) {
+      errEl.textContent = `Could not save: ${e.message} — nothing was changed.`;
+      errEl.classList.remove("hidden");
+    }
+  }
+
   function openCapitalModal() {
     const acct = (state.doc || {}).account || {};
     const override = effectiveCapital();
@@ -682,6 +838,11 @@ const GYBTrack = (() => {
     refreshSetupBox();
 
     $("#btn-adjust-capital").classList.toggle("hidden", !state.writable);
+
+    const nExcluded = activeExclusions().length;
+    $("#btn-excluded").classList.toggle("hidden", !state.writable);
+    $("#btn-excluded").textContent = nExcluded
+      ? `Excluded stocks (${nExcluded})…` : "Excluded stocks…";
 
     const open = selections.filter((s) => s.status === "OPEN");
     const closed = selections.filter((s) => s.close && s.status !== "OPEN");
@@ -828,6 +989,22 @@ const GYBTrack = (() => {
     $("#cap-cancel").addEventListener("click", () => $("#capital-dialog").close());
     $("#cap-confirm").addEventListener("click", confirmCapital);
 
+    $("#exc-cancel").addEventListener("click", () => $("#exclude-dialog").close());
+    $("#exc-confirm").addEventListener("click", confirmExclude);
+    $("#exclude-dialog").querySelectorAll("[data-months]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const months = Number(btn.dataset.months);
+        $("#exc-review").value = months > 0 ? monthsFromNow(months) : "";
+      });
+    });
+
+    $("#btn-excluded").addEventListener("click", openExcludedModal);
+    $("#exl-close").addEventListener("click", () => $("#excluded-dialog").close());
+    $("#excluded-list tbody").addEventListener("click", (ev) => {
+      const btn = ev.target.closest(".btn-unexclude");
+      if (btn) removeExclusion(btn.dataset.ticker);
+    });
+
     $("#picks-open tbody").addEventListener("click", (ev) => {
       const btn = ev.target.closest(".btn-close-early");
       if (!btn) return;
@@ -848,7 +1025,12 @@ const GYBTrack = (() => {
     wireModals();
     await loadSelections();
     renderMyPicks();
+    // The tables rendered before the selections doc arrived, so they don't yet
+    // know what's excluded — repaint them now that we do.
+    refreshScreenerTables();
   }
 
-  return { init, openSelectModal };
+  // isExcluded/canWrite let app.js mark and offer rows without reaching into
+  // the selections doc itself.
+  return { init, openSelectModal, openExcludeModal, isExcluded, canWrite: () => state.writable };
 })();

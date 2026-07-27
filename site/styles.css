@@ -176,11 +176,39 @@ tbody tr:hover { background: var(--panel-2); }
 }
 .btn-select:hover { filter: brightness(1.15); }
 .btn-close-early, .btn-edit-close { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+/* Excluding is a "no" action — never the same colour as the primary Select. */
+.btn-exclude, .btn-unexclude { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); }
+.btn-exclude:hover, .btn-unexclude:hover { color: var(--text); }
 
-.picks-actions { margin: 0.35rem 0 0.6rem; }
+/* A row for a stock you've just excluded: still listed (this snapshot was
+   screened before you excluded it), but visibly no longer a live idea. */
+/* Dimmed via colour rather than opacity, so the cells below can opt back out —
+   a child cannot undo an ancestor's opacity. */
+.row-excluded > td { color: var(--muted); text-decoration: line-through; }
+/* The row is struck through, but its action and its badges still have to be
+   readable: they are what you act on. inline-block stops the row's
+   line-through from propagating into them. */
+.row-excluded > td:last-child { text-decoration: none; }
+.row-excluded > td .badge-flag { display: inline-block; text-decoration: none; }
+
+.picks-actions { margin: 0.35rem 0 0.6rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
 #cap-input { width: 9rem; }
 #cap-note { width: 100%; max-width: 300px; text-align: left; }
 #ecl-date { width: auto; }
+#exc-reason { width: 100%; max-width: 300px; text-align: left; }
+/* Date field plus three presets. Deliberately NOT .stepper — that class sizes
+   its buttons to a 2rem square for the +/- controls, which crushes text labels. */
+.exc-review-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.exc-review-row .btn-select { white-space: nowrap; flex: none; }
+#exc-review {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 0.35rem 0.4rem; font-size: 0.95rem;
+}
+/* Wider than the default modal: five columns of list don't fit in 460px. */
+#excluded-dialog { max-width: 680px; }
+#excluded-list { font-size: 0.82rem; }
+#excluded-list td, #excluded-list th { white-space: nowrap; }
+#excluded-list td:nth-child(2) { white-space: normal; min-width: 12rem; }
 
 h3 { font-size: 0.95rem; margin: 1.1rem 0 0.5rem; }
 

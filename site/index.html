@@ -103,6 +103,7 @@
       <div id="picks-status" class="muted"></div>
       <div class="picks-actions">
         <button type="button" id="btn-adjust-capital" class="btn-select hidden">Adjust capital…</button>
+        <button type="button" id="btn-excluded" class="btn-select hidden">Excluded stocks…</button>
       </div>
       <section class="cards" id="picks-cards"></section>
       <div id="picks-open-block" class="hidden">
@@ -204,6 +205,7 @@
               <th data-key="max_contracts" class="num" title="How many contracts fit your account's risk limits. 0 = one contract already needs more cash than your limits allow.">Fits</th>
               <th data-key="flags">Notes</th>
               <th title="Record this pick under 'My picks' so its result is tracked. Nothing is traded.">Select</th>
+              <th title="Never screen this stock again. It stays out until you remove it — permanently, or until a review date you choose.">Exclude</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -231,6 +233,7 @@
               <th class="num">Cushion</th>
               <th class="num">Score</th>
               <th>Why excluded</th>
+              <th title="Never screen this stock again. It stays out until you remove it — permanently, or until a review date you choose.">Exclude</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -392,6 +395,57 @@
     <div class="modal-actions">
       <button type="button" id="cap-cancel">Cancel</button>
       <button type="button" id="cap-confirm" class="btn-primary">Save</button>
+    </div>
+  </dialog>
+
+  <!-- Exclude-a-stock dialog -->
+  <dialog id="exclude-dialog" class="modal">
+    <h3 id="exc-title">Never screen this stock</h3>
+    <p class="muted">It drops out of the screener from its next run. Nothing about your
+      existing picks changes — this only affects which stocks get looked at.</p>
+    <label class="modal-label" for="exc-reason">Why? (so future-you knows)</label>
+    <div class="stepper">
+      <input type="text" id="exc-reason" maxlength="80" placeholder="e.g. burned me in March" />
+    </div>
+    <label class="modal-label" for="exc-review">Review it again on (optional)</label>
+    <div class="exc-review-row">
+      <input type="date" id="exc-review" />
+      <button type="button" class="btn-select" data-months="3">3 months</button>
+      <button type="button" class="btn-select" data-months="6">6 months</button>
+      <button type="button" class="btn-select" data-months="0">Never</button>
+    </div>
+    <p class="muted">Leave the date empty to exclude it for good. With a date, the exclusion
+      lifts by itself once that day arrives — useful for "not until this lawsuit is over".</p>
+    <div id="exc-error" class="notice error hidden"></div>
+    <div class="modal-actions">
+      <button type="button" id="exc-cancel">Cancel</button>
+      <button type="button" id="exc-confirm" class="btn-primary">Exclude</button>
+    </div>
+  </dialog>
+
+  <!-- Excluded-stocks management dialog -->
+  <dialog id="excluded-dialog" class="modal">
+    <h3>Excluded stocks</h3>
+    <p class="muted">Stocks the screener skips entirely. Removing one puts it back in the
+      running from the next run.</p>
+    <div id="exl-empty" class="muted hidden">You haven't excluded any stocks yet.</div>
+    <div class="table-wrap">
+      <table id="excluded-list">
+        <thead>
+          <tr>
+            <th>Stock</th>
+            <th>Why</th>
+            <th>Added</th>
+            <th>Review on</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div id="exl-error" class="notice error hidden"></div>
+    <div class="modal-actions">
+      <button type="button" id="exl-close">Close</button>
     </div>
   </dialog>
 
