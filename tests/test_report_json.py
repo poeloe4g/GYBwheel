@@ -111,6 +111,46 @@ def test_write_json_publishes_quality_thresholds(tmp_path):
     assert doc["thresholds"]["premium_basis"] == "bid"
 
 
+def test_write_json_publishes_universe_and_blacklist(tmp_path):
+    """Schema v8: the dashboard renders the exclusion list from the snapshot, so
+    the active and the self-released entries both have to reach it."""
+    config = {**_CONFIG, "universe": {
+        "min_market_cap": 20000000000, "min_avg_volume": 1000000,
+        "require_profitable": True, "require_positive_fcf": True,
+        "require_options": True, "allow_list": [],
+        "ban_list": [
+            "PLAIN",
+            {"ticker": "XYZ", "reason": "burned me", "review_after": "2099-01-01"},
+            {"ticker": "OLD", "reason": "temporary", "review_after": "2000-01-01"},
+        ],
+    }}
+    out = report_mod.write_json(
+        _header(), [], _Regime(), config, tmp_path / "run.json",
+        generated_at=datetime(2026, 7, 17, 21, 5, tzinfo=timezone.utc),
+    )
+    doc = json.loads(out.read_text())
+    universe = doc["thresholds"]["universe"]
+    assert universe["min_market_cap"] == 20000000000
+    assert [e["ticker"] for e in universe["blacklist"]] == ["PLAIN", "XYZ"]
+    assert universe["blacklist"][1]["reason"] == "burned me"
+    # A bare string normalizes to the same shape, so the UI has one code path.
+    assert universe["blacklist"][0] == {
+        "ticker": "PLAIN", "reason": "", "added": None, "review_after": None,
+    }
+    assert [e["ticker"] for e in universe["blacklist_expired"]] == ["OLD"]
+
+
+def test_write_json_universe_block_survives_missing_config(tmp_path):
+    out = report_mod.write_json(
+        _header(), [], _Regime(), {**_CONFIG}, tmp_path / "run.json",
+        generated_at=datetime(2026, 7, 17, 21, 5, tzinfo=timezone.utc),
+    )
+    universe = json.loads(out.read_text())["thresholds"]["universe"]
+    assert universe["blacklist"] == []
+    assert universe["blacklist_expired"] == []
+    assert universe["min_market_cap"] is None
+
+
 def test_write_json_near_misses_roundtrip(tmp_path):
     near = [{"ticker": "BBB", "score": 1.1,
              "rejection_reasons": [{"code": "spread", "message": "spread 0.2 > 0.15"}],

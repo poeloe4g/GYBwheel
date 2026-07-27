@@ -71,7 +71,7 @@ def load_positions(
         sources.append(str(p))
     state.deployed_positions = state.total_deployed
 
-    doc = _load_selections_doc(selections_path)
+    doc = load_selections_doc(selections_path)
     n_open = _apply_open_selections(state, doc)
     if n_open:
         sources.append(f"{n_open} open selection{'s' if n_open != 1 else ''}")
@@ -86,7 +86,7 @@ def load_positions(
     return state
 
 
-def _load_selections_doc(path: str | Path) -> dict[str, Any] | None:
+def load_selections_doc(path: str | Path) -> dict[str, Any] | None:
     """Parse the selections doc; None if absent/unreadable (never fails a run)."""
     p = Path(path)
     if not p.exists():

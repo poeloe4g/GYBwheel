@@ -13,6 +13,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import blacklist
 import regime as regime_mod
 import report as report_mod
 import score as score_mod
@@ -103,6 +104,16 @@ def run(args: argparse.Namespace) -> int:
     if account.total_capital_override is not None:
         config["account"]["total_capital"] = account.total_capital_override
 
+    # Same pattern for the blacklist: the dashboard list unions with
+    # config.yaml's (the dashboard wins on conflict), and one mutation covers
+    # every reader — the universe filter, the rejection counts, and the
+    # snapshot's thresholds.universe echo. Merged before the RED-regime return
+    # so both snapshot shapes report the same active list.
+    config["universe"]["ban_list"] = blacklist.merge(
+        config["universe"].get("ban_list", []),
+        blacklist.from_selections(size_mod.load_selections_doc(args.selections)),
+    )
+
     if regime.is_red:
         header = report_mod.build_header(regime, account, config)
         print(report_mod.render_console(header, []))
@@ -150,8 +161,10 @@ def run(args: argparse.Namespace) -> int:
     def _count_flag(code: str) -> None:
         flag_counts[code] = flag_counts.get(code, 0) + 1
 
-    for _ in universe_rejects:
-        _count("universe")
+    # Count each drop under its own code: a name you blacklisted must not be
+    # reported as having failed the company-quality screen.
+    for r in universe_rejects:
+        _count(r.get("code") or "universe")
 
     for f in passing:
         ticker = f["ticker"]
