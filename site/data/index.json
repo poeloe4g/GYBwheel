@@ -1,6 +1,6 @@
 {
-  "updated_at": "2026-11-12T22:49:25+00:00",
-  "latest": "2026-11-12",
+  "updated_at": "2026-11-13T22:44:53+00:00",
+  "latest": "2026-11-13",
   "runs": [
     {
       "date": "2026-06-24",
@@ -788,6 +788,16 @@
       "row_count": 25,
       "near_miss_count": 25,
       "top_score": 0.11974432231562064,
+      "pct_deployed": 0.0,
+      "demo": false,
+      "quotes_trusted": false
+    },
+    {
+      "date": "2026-11-13",
+      "light": "GREEN",
+      "row_count": 25,
+      "near_miss_count": 25,
+      "top_score": 0.12247053749011157,
       "pct_deployed": 0.0,
       "demo": false,
       "quotes_trusted": false
