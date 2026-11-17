@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-13T22:44:53+00:00",
+  "updated_at": "2026-11-17T00:56:49+00:00",
   "outcomes": {
     "2026-07-03|NVDA|2026-08-07|175.0": {
       "run_date": "2026-07-03",
@@ -34819,20 +34819,2069 @@
       "realized_roc": 0.011413,
       "annualized_realized": 0.138859,
       "evaluated_at": "2026-11-10"
+    },
+    "2026-10-05|NVDA|2026-11-13|220.0": {
+      "run_date": "2026-10-05",
+      "ticker": "NVDA",
+      "expiration": "2026-11-13",
+      "strike": 220.0,
+      "premium": 2.6775,
+      "spot": 238.9,
+      "group": "candidate",
+      "rejection_codes": [],
+      "flag_codes": [],
+      "expiry_close": 162.85,
+      "min_close": 162.85,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.247602,
+      "annualized_realized": -2.317303,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-05|AMD|2026-11-13|560.0": {
+      "run_date": "2026-10-05",
+      "ticker": "AMD",
+      "expiration": "2026-11-13",
+      "strike": 560.0,
+      "premium": 14.4875,
+      "spot": 631.75,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 534.06,
+      "min_close": 404.4,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.020451,
+      "annualized_realized": -0.191399,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-05|QCOM|2026-11-13|160.0": {
+      "run_date": "2026-10-05",
+      "ticker": "QCOM",
+      "expiration": "2026-11-13",
+      "strike": 160.0,
+      "premium": 3.5374999999999996,
+      "spot": 180.79,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 172.47,
+      "min_close": 156.75,
+      "win": true,
+      "touched": true,
+      "realized_roc": 0.022109,
+      "annualized_realized": 0.206921,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-05|NFLX|2026-11-13|61.0": {
+      "run_date": "2026-10-05",
+      "ticker": "NFLX",
+      "expiration": "2026-11-13",
+      "strike": 61.0,
+      "premium": 1.1475,
+      "spot": 67.5,
+      "group": "near_miss",
+      "rejection_codes": [
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 62.15,
+      "min_close": 61.99,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.018811,
+      "annualized_realized": 0.176056,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-05|ACN|2026-11-13|175.0": {
+      "run_date": "2026-10-05",
+      "ticker": "ACN",
+      "expiration": "2026-11-13",
+      "strike": 175.0,
+      "premium": 3.125,
+      "spot": 195.05,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 250.49,
+      "min_close": 191.8609,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.017857,
+      "annualized_realized": 0.167125,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-05|IBM|2026-11-13|200.0": {
+      "run_date": "2026-10-05",
+      "ticker": "IBM",
+      "expiration": "2026-11-13",
+      "strike": 200.0,
+      "premium": 3.8750000000000004,
+      "spot": 221.58,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 247.13,
+      "min_close": 218.9958,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.019375,
+      "annualized_realized": 0.18133,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-05|TXN|2026-11-13|260.0": {
+      "run_date": "2026-10-05",
+      "ticker": "TXN",
+      "expiration": "2026-11-13",
+      "strike": 260.0,
+      "premium": 4.487500000000001,
+      "spot": 294.9,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 303.6,
+      "min_close": 274.8087,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.01726,
+      "annualized_realized": 0.161532,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-05|AMZN|2026-11-13|230.0": {
+      "run_date": "2026-10-05",
+      "ticker": "AMZN",
+      "expiration": "2026-11-13",
+      "strike": 230.0,
+      "premium": 3.875,
+      "spot": 251.4,
+      "group": "near_miss",
+      "rejection_codes": [
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 266.66,
+      "min_close": 240.35,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.016848,
+      "annualized_realized": 0.157678,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-06|IBM|2026-11-13|200.0": {
+      "run_date": "2026-10-06",
+      "ticker": "IBM",
+      "expiration": "2026-11-13",
+      "strike": 200.0,
+      "premium": 3.85,
+      "spot": 221.29,
+      "group": "near_miss",
+      "rejection_codes": [
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 247.13,
+      "min_close": 218.9958,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.01925,
+      "annualized_realized": 0.184901,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-06|META|2026-11-13|670.0": {
+      "run_date": "2026-10-06",
+      "ticker": "META",
+      "expiration": "2026-11-13",
+      "strike": 670.0,
+      "premium": 11.7125,
+      "spot": 738.88,
+      "group": "near_miss",
+      "rejection_codes": [
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 641.69,
+      "min_close": 605.08,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.024772,
+      "annualized_realized": -0.237945,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-06|TSLA|2026-11-13|345.0": {
+      "run_date": "2026-10-06",
+      "ticker": "TSLA",
+      "expiration": "2026-11-13",
+      "strike": 345.0,
+      "premium": 6.0625,
+      "spot": 380.68,
+      "group": "near_miss",
+      "rejection_codes": [
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 390.22,
+      "min_close": 343.69,
+      "win": true,
+      "touched": true,
+      "realized_roc": 0.017572,
+      "annualized_realized": 0.168788,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-06|NFLX|2026-11-13|62.0": {
+      "run_date": "2026-10-06",
+      "ticker": "NFLX",
+      "expiration": "2026-11-13",
+      "strike": 62.0,
+      "premium": 1.0425,
+      "spot": 68.69,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 62.15,
+      "min_close": 61.99,
+      "win": true,
+      "touched": true,
+      "realized_roc": 0.016815,
+      "annualized_realized": 0.161508,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-06|CVS|2026-11-13|78.0": {
+      "run_date": "2026-10-06",
+      "ticker": "CVS",
+      "expiration": "2026-11-13",
+      "strike": 78.0,
+      "premium": 1.31,
+      "spot": 86.43,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 89.35,
+      "min_close": 79.96,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.016795,
+      "annualized_realized": 0.161319,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-06|GOOGL|2026-11-13|320.0": {
+      "run_date": "2026-10-06",
+      "ticker": "GOOGL",
+      "expiration": "2026-11-13",
+      "strike": 320.0,
+      "premium": 4.449999999999999,
+      "spot": 347.68,
+      "group": "near_miss",
+      "rejection_codes": [
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 295.77,
+      "min_close": 278.99,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.061813,
+      "annualized_realized": -0.593726,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-06|CMCSA|2026-11-13|19.0": {
+      "run_date": "2026-10-06",
+      "ticker": "CMCSA",
+      "expiration": "2026-11-13",
+      "strike": 19.0,
+      "premium": 0.275,
+      "spot": 21.56,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 25.16,
+      "min_close": 20.66,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.014474,
+      "annualized_realized": 0.139024,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-06|MSFT|2026-11-13|490.0": {
+      "run_date": "2026-10-06",
+      "ticker": "MSFT",
+      "expiration": "2026-11-13",
+      "strike": 490.0,
+      "premium": 6.1875,
+      "spot": 529.3,
+      "group": "near_miss",
+      "rejection_codes": [
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 523.88,
+      "min_close": 507.12,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.012628,
+      "annualized_realized": 0.121291,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-07|AVGO|2026-11-13|345.0": {
+      "run_date": "2026-10-07",
+      "ticker": "AVGO",
+      "expiration": "2026-11-13",
+      "strike": 345.0,
+      "premium": 5.425,
+      "spot": 376.51,
+      "group": "candidate",
+      "rejection_codes": [],
+      "flag_codes": [],
+      "expiry_close": 347.01,
+      "min_close": 291.53,
+      "win": true,
+      "touched": true,
+      "realized_roc": 0.015725,
+      "annualized_realized": 0.155121,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-07|NVDA|2026-11-13|220.0": {
+      "run_date": "2026-10-07",
+      "ticker": "NVDA",
+      "expiration": "2026-11-13",
+      "strike": 220.0,
+      "premium": 2.895,
+      "spot": 237.47,
+      "group": "candidate",
+      "rejection_codes": [],
+      "flag_codes": [],
+      "expiry_close": 162.85,
+      "min_close": 162.85,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.246614,
+      "annualized_realized": -2.43281,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-07|NOW|2026-11-13|121.0": {
+      "run_date": "2026-10-07",
+      "ticker": "NOW",
+      "expiration": "2026-11-13",
+      "strike": 121.0,
+      "premium": 3.0875,
+      "spot": 137.87,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 102.25,
+      "min_close": 99.61,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.129442,
+      "annualized_realized": -1.276929,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-07|QCOM|2026-11-13|155.0": {
+      "run_date": "2026-10-07",
+      "ticker": "QCOM",
+      "expiration": "2026-11-13",
+      "strike": 155.0,
+      "premium": 2.6775,
+      "spot": 177.12,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "spread",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 172.47,
+      "min_close": 156.75,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.017274,
+      "annualized_realized": 0.170408,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-07|IBM|2026-11-13|200.0": {
+      "run_date": "2026-10-07",
+      "ticker": "IBM",
+      "expiration": "2026-11-13",
+      "strike": 200.0,
+      "premium": 3.5374999999999996,
+      "spot": 220.51,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 247.13,
+      "min_close": 225.0539,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.017687,
+      "annualized_realized": 0.174485,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-08|AVGO|2026-11-13|330.0": {
+      "run_date": "2026-10-08",
+      "ticker": "AVGO",
+      "expiration": "2026-11-13",
+      "strike": 330.0,
+      "premium": 5.362500000000001,
+      "spot": 360.14,
+      "group": "candidate",
+      "rejection_codes": [],
+      "flag_codes": [],
+      "expiry_close": 347.01,
+      "min_close": 291.53,
+      "win": true,
+      "touched": true,
+      "realized_roc": 0.01625,
+      "annualized_realized": 0.164757,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-08|NVDA|2026-11-13|215.0": {
+      "run_date": "2026-10-08",
+      "ticker": "NVDA",
+      "expiration": "2026-11-13",
+      "strike": 215.0,
+      "premium": 3.3375,
+      "spot": 230.48,
+      "group": "candidate",
+      "rejection_codes": [],
+      "flag_codes": [],
+      "expiry_close": 162.85,
+      "min_close": 162.85,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.227035,
+      "annualized_realized": -2.301881,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-08|NOW|2026-11-13|122.0": {
+      "run_date": "2026-10-08",
+      "ticker": "NOW",
+      "expiration": "2026-11-13",
+      "strike": 122.0,
+      "premium": 3.175,
+      "spot": 139.75,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 102.25,
+      "min_close": 99.61,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.135861,
+      "annualized_realized": -1.377476,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-08|PLTR|2026-11-13|175.0": {
+      "run_date": "2026-10-08",
+      "ticker": "PLTR",
+      "expiration": "2026-11-13",
+      "strike": 175.0,
+      "premium": 4.525,
+      "spot": 198.78,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 167.99,
+      "min_close": 154.99,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.0142,
+      "annualized_realized": -0.143972,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-08|AMD|2026-11-13|550.0": {
+      "run_date": "2026-10-08",
+      "ticker": "AMD",
+      "expiration": "2026-11-13",
+      "strike": 550.0,
+      "premium": 14.024999999999999,
+      "spot": 620.68,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 534.06,
+      "min_close": 404.4,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.003482,
+      "annualized_realized": -0.035302,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-08|TSLA|2026-11-13|340.0": {
+      "run_date": "2026-10-08",
+      "ticker": "TSLA",
+      "expiration": "2026-11-13",
+      "strike": 340.0,
+      "premium": 6.0625,
+      "spot": 375.0,
+      "group": "near_miss",
+      "rejection_codes": [
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 390.22,
+      "min_close": 343.69,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.017831,
+      "annualized_realized": 0.180785,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-08|IBM|2026-11-13|205.0": {
+      "run_date": "2026-10-08",
+      "ticker": "IBM",
+      "expiration": "2026-11-13",
+      "strike": 205.0,
+      "premium": 3.7375000000000003,
+      "spot": 226.61,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 247.13,
+      "min_close": 225.4611,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.018232,
+      "annualized_realized": 0.184849,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-08|PYPL|2026-11-13|50.0": {
+      "run_date": "2026-10-08",
+      "ticker": "PYPL",
+      "expiration": "2026-11-13",
+      "strike": 50.0,
+      "premium": 0.9524999999999999,
+      "spot": 55.02,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 59.28,
+      "min_close": 54.99,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.01905,
+      "annualized_realized": 0.193146,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-08|GOOGL|2026-11-13|320.0": {
+      "run_date": "2026-10-08",
+      "ticker": "GOOGL",
+      "expiration": "2026-11-13",
+      "strike": 320.0,
+      "premium": 4.6875,
+      "spot": 348.29,
+      "group": "near_miss",
+      "rejection_codes": [
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 295.77,
+      "min_close": 278.99,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.06107,
+      "annualized_realized": -0.619185,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-08|CSCO|2026-11-13|102.0": {
+      "run_date": "2026-10-08",
+      "ticker": "CSCO",
+      "expiration": "2026-11-13",
+      "strike": 102.0,
+      "premium": 1.4325,
+      "spot": 114.89,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 95.64,
+      "min_close": 93.85,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.048309,
+      "annualized_realized": -0.489798,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-08|CMCSA|2026-11-13|19.0": {
+      "run_date": "2026-10-08",
+      "ticker": "CMCSA",
+      "expiration": "2026-11-13",
+      "strike": 19.0,
+      "premium": 0.2425,
+      "spot": 21.21,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 25.16,
+      "min_close": 20.66,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.012763,
+      "annualized_realized": 0.129404,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-08|LLY|2026-11-13|1050.0": {
+      "run_date": "2026-10-08",
+      "ticker": "LLY",
+      "expiration": "2026-11-13",
+      "strike": 1050.0,
+      "premium": 14.725,
+      "spot": 1169.6,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 1443.5,
+      "min_close": 1165.0961,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.014024,
+      "annualized_realized": 0.142186,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-09|NKE|2026-11-13|32.0": {
+      "run_date": "2026-10-09",
+      "ticker": "NKE",
+      "expiration": "2026-11-13",
+      "strike": 32.0,
+      "premium": 0.3775,
+      "spot": 34.71,
+      "group": "candidate",
+      "rejection_codes": [],
+      "flag_codes": [],
+      "expiry_close": 37.99,
+      "min_close": 35.3,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.011797,
+      "annualized_realized": 0.123025,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-09|NVDA|2026-11-13|215.0": {
+      "run_date": "2026-10-09",
+      "ticker": "NVDA",
+      "expiration": "2026-11-13",
+      "strike": 215.0,
+      "premium": 3.0875,
+      "spot": 229.28,
+      "group": "candidate",
+      "rejection_codes": [],
+      "flag_codes": [],
+      "expiry_close": 162.85,
+      "min_close": 162.85,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.228198,
+      "annualized_realized": -2.379775,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-09|NOW|2026-11-13|124.0": {
+      "run_date": "2026-10-09",
+      "ticker": "NOW",
+      "expiration": "2026-11-13",
+      "strike": 124.0,
+      "premium": 3.1625,
+      "spot": 140.86,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 102.25,
+      "min_close": 99.61,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.149899,
+      "annualized_realized": -1.563234,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-09|PLTR|2026-11-13|185.0": {
+      "run_date": "2026-10-09",
+      "ticker": "PLTR",
+      "expiration": "2026-11-13",
+      "strike": 185.0,
+      "premium": 4.8375,
+      "spot": 209.05,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 167.99,
+      "min_close": 154.99,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.065797,
+      "annualized_realized": -0.686172,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-09|AMD|2026-11-13|540.0": {
+      "run_date": "2026-10-09",
+      "ticker": "AMD",
+      "expiration": "2026-11-13",
+      "strike": 540.0,
+      "premium": 12.7625,
+      "spot": 608.1,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 534.06,
+      "min_close": 404.4,
+      "win": false,
+      "touched": true,
+      "realized_roc": 0.012634,
+      "annualized_realized": 0.131757,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-09|INTU|2026-11-13|270.0": {
+      "run_date": "2026-10-09",
+      "ticker": "INTU",
+      "expiration": "2026-11-13",
+      "strike": 270.0,
+      "premium": 4.7,
+      "spot": 302.75,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 341.7,
+      "min_close": 301.45,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.017407,
+      "annualized_realized": 0.181534,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-09|CSCO|2026-11-13|107.0": {
+      "run_date": "2026-10-09",
+      "ticker": "CSCO",
+      "expiration": "2026-11-13",
+      "strike": 107.0,
+      "premium": 1.8275000000000001,
+      "spot": 118.39,
+      "group": "near_miss",
+      "rejection_codes": [
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 95.64,
+      "min_close": 93.85,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.089089,
+      "annualized_realized": -0.929069,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-09|PYPL|2026-11-13|50.0": {
+      "run_date": "2026-10-09",
+      "ticker": "PYPL",
+      "expiration": "2026-11-13",
+      "strike": 50.0,
+      "premium": 0.845,
+      "spot": 55.53,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 59.28,
+      "min_close": 54.99,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.0169,
+      "annualized_realized": 0.176243,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-09|NFLX|2026-11-13|64.0": {
+      "run_date": "2026-10-09",
+      "ticker": "NFLX",
+      "expiration": "2026-11-13",
+      "strike": 64.0,
+      "premium": 1.085,
+      "spot": 70.3,
+      "group": "near_miss",
+      "rejection_codes": [
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 62.15,
+      "min_close": 61.99,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.011953,
+      "annualized_realized": -0.124654,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-09|AMZN|2026-11-13|240.0": {
+      "run_date": "2026-10-09",
+      "ticker": "AMZN",
+      "expiration": "2026-11-13",
+      "strike": 240.0,
+      "premium": 3.7625,
+      "spot": 262.43,
+      "group": "near_miss",
+      "rejection_codes": [
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 266.66,
+      "min_close": 240.35,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.015677,
+      "annualized_realized": 0.16349,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-09|UNH|2026-11-13|350.0": {
+      "run_date": "2026-10-09",
+      "ticker": "UNH",
+      "expiration": "2026-11-13",
+      "strike": 350.0,
+      "premium": 5.925,
+      "spot": 379.3,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 407.46,
+      "min_close": 377.76,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.016929,
+      "annualized_realized": 0.176541,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-09|IBM|2026-11-13|205.0": {
+      "run_date": "2026-10-09",
+      "ticker": "IBM",
+      "expiration": "2026-11-13",
+      "strike": 205.0,
+      "premium": 2.9124999999999996,
+      "spot": 227.13,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 247.13,
+      "min_close": 225.4611,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.014207,
+      "annualized_realized": 0.148162,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-09|GOOGL|2026-11-13|325.0": {
+      "run_date": "2026-10-09",
+      "ticker": "GOOGL",
+      "expiration": "2026-11-13",
+      "strike": 325.0,
+      "premium": 4.7125,
+      "spot": 351.66,
+      "group": "near_miss",
+      "rejection_codes": [
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 295.77,
+      "min_close": 278.99,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.075438,
+      "annualized_realized": -0.786716,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-09|CVS|2026-11-13|78.0": {
+      "run_date": "2026-10-09",
+      "ticker": "CVS",
+      "expiration": "2026-11-13",
+      "strike": 78.0,
+      "premium": 0.9950000000000001,
+      "spot": 86.16,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 89.35,
+      "min_close": 79.96,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.012756,
+      "annualized_realized": 0.133031,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-09|ACN|2026-11-13|187.5": {
+      "run_date": "2026-10-09",
+      "ticker": "ACN",
+      "expiration": "2026-11-13",
+      "strike": 187.5,
+      "premium": 2.4,
+      "spot": 209.06,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 250.49,
+      "min_close": 213.16,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.0128,
+      "annualized_realized": 0.133486,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-12|AVGO|2026-11-13|330.0": {
+      "run_date": "2026-10-12",
+      "ticker": "AVGO",
+      "expiration": "2026-11-13",
+      "strike": 330.0,
+      "premium": 5.1125,
+      "spot": 354.73,
+      "group": "candidate",
+      "rejection_codes": [],
+      "flag_codes": [],
+      "expiry_close": 347.01,
+      "min_close": 291.53,
+      "win": true,
+      "touched": true,
+      "realized_roc": 0.015492,
+      "annualized_realized": 0.17671,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-12|NVDA|2026-11-13|210.0": {
+      "run_date": "2026-10-12",
+      "ticker": "NVDA",
+      "expiration": "2026-11-13",
+      "strike": 210.0,
+      "premium": 2.4325,
+      "spot": 226.32,
+      "group": "candidate",
+      "rejection_codes": [],
+      "flag_codes": [],
+      "expiry_close": 162.85,
+      "min_close": 162.85,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.21294,
+      "annualized_realized": -2.428852,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-12|HD|2026-11-13|275.0": {
+      "run_date": "2026-10-12",
+      "ticker": "HD",
+      "expiration": "2026-11-13",
+      "strike": 275.0,
+      "premium": 2.965,
+      "spot": 290.62,
+      "group": "candidate",
+      "rejection_codes": [],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 348.69,
+      "min_close": 293.92,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.010782,
+      "annualized_realized": 0.12298,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-12|PLTR|2026-11-13|185.0": {
+      "run_date": "2026-10-12",
+      "ticker": "PLTR",
+      "expiration": "2026-11-13",
+      "strike": 185.0,
+      "premium": 4.487500000000001,
+      "spot": 209.0,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 167.99,
+      "min_close": 154.99,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.067689,
+      "annualized_realized": -0.772079,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-12|NOW|2026-11-13|124.0": {
+      "run_date": "2026-10-12",
+      "ticker": "NOW",
+      "expiration": "2026-11-13",
+      "strike": 124.0,
+      "premium": 3.01,
+      "spot": 140.32,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 102.25,
+      "min_close": 99.61,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.151129,
+      "annualized_realized": -1.723816,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-12|AMD|2026-11-13|530.0": {
+      "run_date": "2026-10-12",
+      "ticker": "AMD",
+      "expiration": "2026-11-13",
+      "strike": 530.0,
+      "premium": 11.65,
+      "spot": 594.24,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 534.06,
+      "min_close": 404.4,
+      "win": true,
+      "touched": true,
+      "realized_roc": 0.021981,
+      "annualized_realized": 0.250722,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-12|META|2026-11-13|675.0": {
+      "run_date": "2026-10-12",
+      "ticker": "META",
+      "expiration": "2026-11-13",
+      "strike": 675.0,
+      "premium": 11.7875,
+      "spot": 742.96,
+      "group": "near_miss",
+      "rejection_codes": [
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 641.69,
+      "min_close": 605.08,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.031885,
+      "annualized_realized": -0.36369,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-12|TSLA|2026-11-13|345.0": {
+      "run_date": "2026-10-12",
+      "ticker": "TSLA",
+      "expiration": "2026-11-13",
+      "strike": 345.0,
+      "premium": 5.8375,
+      "spot": 378.03,
+      "group": "near_miss",
+      "rejection_codes": [
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 390.22,
+      "min_close": 343.69,
+      "win": true,
+      "touched": true,
+      "realized_roc": 0.01692,
+      "annualized_realized": 0.192997,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-12|NFLX|2026-11-13|64.0": {
+      "run_date": "2026-10-12",
+      "ticker": "NFLX",
+      "expiration": "2026-11-13",
+      "strike": 64.0,
+      "premium": 1.035,
+      "spot": 70.61,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 62.15,
+      "min_close": 61.99,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.012734,
+      "annualized_realized": -0.145251,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-12|LLY|2026-11-13|1075.0": {
+      "run_date": "2026-10-12",
+      "ticker": "LLY",
+      "expiration": "2026-11-13",
+      "strike": 1075.0,
+      "premium": 16.65,
+      "spot": 1182.62,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 1443.5,
+      "min_close": 1165.0961,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.015488,
+      "annualized_realized": 0.176664,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-12|AMZN|2026-11-13|240.0": {
+      "run_date": "2026-10-12",
+      "ticker": "AMZN",
+      "expiration": "2026-11-13",
+      "strike": 240.0,
+      "premium": 4.0125,
+      "spot": 259.53,
+      "group": "near_miss",
+      "rejection_codes": [
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 266.66,
+      "min_close": 240.35,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.016719,
+      "annualized_realized": 0.190698,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-12|IBM|2026-11-13|205.0": {
+      "run_date": "2026-10-12",
+      "ticker": "IBM",
+      "expiration": "2026-11-13",
+      "strike": 205.0,
+      "premium": 2.815,
+      "spot": 227.02,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 247.13,
+      "min_close": 226.3152,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.013732,
+      "annualized_realized": 0.156627,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-12|FDX|2026-11-13|265.0": {
+      "run_date": "2026-10-12",
+      "ticker": "FDX",
+      "expiration": "2026-11-13",
+      "strike": 265.0,
+      "premium": 3.1975,
+      "spot": 292.23,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 324.14,
+      "min_close": 290.59,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.012066,
+      "annualized_realized": 0.137628,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-12|CSCO|2026-11-13|105.0": {
+      "run_date": "2026-10-12",
+      "ticker": "CSCO",
+      "expiration": "2026-11-13",
+      "strike": 105.0,
+      "premium": 1.4049999999999998,
+      "spot": 115.34,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 95.64,
+      "min_close": 93.85,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.075762,
+      "annualized_realized": -0.864159,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-12|GE|2026-11-13|280.0": {
+      "run_date": "2026-10-12",
+      "ticker": "GE",
+      "expiration": "2026-11-13",
+      "strike": 280.0,
+      "premium": 3.2874999999999996,
+      "spot": 308.64,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 331.81,
+      "min_close": 285.64,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.011741,
+      "annualized_realized": 0.133922,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-12|BA|2026-11-13|175.0": {
+      "run_date": "2026-10-12",
+      "ticker": "BA",
+      "expiration": "2026-11-13",
+      "strike": 175.0,
+      "premium": 2.165,
+      "spot": 189.5,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 171.5,
+      "min_close": 167.14,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.007629,
+      "annualized_realized": -0.087013,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-12|MRK|2026-11-13|134.0": {
+      "run_date": "2026-10-12",
+      "ticker": "MRK",
+      "expiration": "2026-11-13",
+      "strike": 134.0,
+      "premium": 1.745,
+      "spot": 145.45,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 147.76,
+      "min_close": 140.61,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.013022,
+      "annualized_realized": 0.148537,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-13|AVGO|2026-11-13|330.0": {
+      "run_date": "2026-10-13",
+      "ticker": "AVGO",
+      "expiration": "2026-11-13",
+      "strike": 330.0,
+      "premium": 5.0875,
+      "spot": 357.31,
+      "group": "candidate",
+      "rejection_codes": [],
+      "flag_codes": [],
+      "expiry_close": 347.01,
+      "min_close": 291.53,
+      "win": true,
+      "touched": true,
+      "realized_roc": 0.015417,
+      "annualized_realized": 0.181519,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-13|NVDA|2026-11-13|215.0": {
+      "run_date": "2026-10-13",
+      "ticker": "NVDA",
+      "expiration": "2026-11-13",
+      "strike": 215.0,
+      "premium": 3.225,
+      "spot": 228.52,
+      "group": "candidate",
+      "rejection_codes": [],
+      "flag_codes": [],
+      "expiry_close": 162.85,
+      "min_close": 162.85,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.227558,
+      "annualized_realized": -2.679313,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-13|NOW|2026-11-13|122.0": {
+      "run_date": "2026-10-13",
+      "ticker": "NOW",
+      "expiration": "2026-11-13",
+      "strike": 122.0,
+      "premium": 3.0675,
+      "spot": 138.61,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 102.25,
+      "min_close": 99.61,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.136742,
+      "annualized_realized": -1.610024,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-13|PLTR|2026-11-13|185.0": {
+      "run_date": "2026-10-13",
+      "ticker": "PLTR",
+      "expiration": "2026-11-13",
+      "strike": 185.0,
+      "premium": 4.6875,
+      "spot": 208.67,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 167.99,
+      "min_close": 154.99,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.066608,
+      "annualized_realized": -0.784256,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-13|NFLX|2026-11-13|64.0": {
+      "run_date": "2026-10-13",
+      "ticker": "NFLX",
+      "expiration": "2026-11-13",
+      "strike": 64.0,
+      "premium": 1.045,
+      "spot": 70.46,
+      "group": "near_miss",
+      "rejection_codes": [
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 62.15,
+      "min_close": 61.99,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.012578,
+      "annualized_realized": -0.148097,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-13|CSCO|2026-11-13|104.0": {
+      "run_date": "2026-10-13",
+      "ticker": "CSCO",
+      "expiration": "2026-11-13",
+      "strike": 104.0,
+      "premium": 1.7200000000000002,
+      "spot": 115.07,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 95.64,
+      "min_close": 93.85,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.063846,
+      "annualized_realized": -0.751737,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-13|LLY|2026-11-13|1060.0": {
+      "run_date": "2026-10-13",
+      "ticker": "LLY",
+      "expiration": "2026-11-13",
+      "strike": 1060.0,
+      "premium": 16.1625,
+      "spot": 1166.51,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 1443.5,
+      "min_close": 1207.2749,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.015248,
+      "annualized_realized": 0.179529,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-13|EMR|2026-11-13|146.0": {
+      "run_date": "2026-10-13",
+      "ticker": "EMR",
+      "expiration": "2026-11-13",
+      "strike": 146.0,
+      "premium": 2.1,
+      "spot": 163.5,
+      "group": "near_miss",
+      "rejection_codes": [
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "quote_indicative",
+        "thin_call_side"
+      ],
+      "expiry_close": 166.38,
+      "min_close": 159.7186,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.014384,
+      "annualized_realized": 0.169355,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-13|CAT|2026-11-13|695.0": {
+      "run_date": "2026-10-13",
+      "ticker": "CAT",
+      "expiration": "2026-11-13",
+      "strike": 695.0,
+      "premium": 9.9875,
+      "spot": 772.78,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 600.2,
+      "min_close": 553.64,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.122032,
+      "annualized_realized": -1.436833,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-13|CVS|2026-11-13|80.0": {
+      "run_date": "2026-10-13",
+      "ticker": "CVS",
+      "expiration": "2026-11-13",
+      "strike": 80.0,
+      "premium": 1.1600000000000001,
+      "spot": 87.55,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 89.35,
+      "min_close": 79.96,
+      "win": true,
+      "touched": true,
+      "realized_roc": 0.0145,
+      "annualized_realized": 0.170726,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-13|INTU|2026-11-13|270.0": {
+      "run_date": "2026-10-13",
+      "ticker": "INTU",
+      "expiration": "2026-11-13",
+      "strike": 270.0,
+      "premium": 3.675,
+      "spot": 301.45,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 341.7,
+      "min_close": 310.44,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.013611,
+      "annualized_realized": 0.16026,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-13|FDX|2026-11-13|260.0": {
+      "run_date": "2026-10-13",
+      "ticker": "FDX",
+      "expiration": "2026-11-13",
+      "strike": 260.0,
+      "premium": 2.89,
+      "spot": 290.59,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 324.14,
+      "min_close": 291.28,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.011115,
+      "annualized_realized": 0.130875,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-13|MRK|2026-11-13|130.0": {
+      "run_date": "2026-10-13",
+      "ticker": "MRK",
+      "expiration": "2026-11-13",
+      "strike": 130.0,
+      "premium": 1.495,
+      "spot": 141.98,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 147.76,
+      "min_close": 140.61,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.0115,
+      "annualized_realized": 0.135403,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-14|NVDA|2026-11-13|205.0": {
+      "run_date": "2026-10-14",
+      "ticker": "NVDA",
+      "expiration": "2026-11-13",
+      "strike": 205.0,
+      "premium": 2.8325,
+      "spot": 221.3,
+      "group": "candidate",
+      "rejection_codes": [],
+      "flag_codes": [],
+      "expiry_close": 162.85,
+      "min_close": 162.85,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.191793,
+      "annualized_realized": -2.333477,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-14|UNH|2026-11-13|370.0": {
+      "run_date": "2026-10-14",
+      "ticker": "UNH",
+      "expiration": "2026-11-13",
+      "strike": 370.0,
+      "premium": 4.05,
+      "spot": 395.62,
+      "group": "candidate",
+      "rejection_codes": [],
+      "flag_codes": [],
+      "expiry_close": 407.46,
+      "min_close": 394.15,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.010946,
+      "annualized_realized": 0.133176,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-14|NOW|2026-11-13|123.0": {
+      "run_date": "2026-10-14",
+      "ticker": "NOW",
+      "expiration": "2026-11-13",
+      "strike": 123.0,
+      "premium": 3.1374999999999997,
+      "spot": 139.98,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 102.25,
+      "min_close": 99.61,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.143191,
+      "annualized_realized": -1.742158,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-14|AMD|2026-11-13|505.0": {
+      "run_date": "2026-10-14",
+      "ticker": "AMD",
+      "expiration": "2026-11-13",
+      "strike": 505.0,
+      "premium": 12.4375,
+      "spot": 570.82,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 534.06,
+      "min_close": 404.4,
+      "win": true,
+      "touched": true,
+      "realized_roc": 0.024629,
+      "annualized_realized": 0.299649,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-14|QCOM|2026-11-13|155.0": {
+      "run_date": "2026-10-14",
+      "ticker": "QCOM",
+      "expiration": "2026-11-13",
+      "strike": 155.0,
+      "premium": 3.37,
+      "spot": 172.62,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "spread",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 172.47,
+      "min_close": 156.75,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.021742,
+      "annualized_realized": 0.264527,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-14|TSLA|2026-11-13|335.0": {
+      "run_date": "2026-10-14",
+      "ticker": "TSLA",
+      "expiration": "2026-11-13",
+      "strike": 335.0,
+      "premium": 5.887499999999999,
+      "spot": 367.16,
+      "group": "near_miss",
+      "rejection_codes": [
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 390.22,
+      "min_close": 343.69,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.017575,
+      "annualized_realized": 0.213825,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-14|META|2026-11-13|670.0": {
+      "run_date": "2026-10-14",
+      "ticker": "META",
+      "expiration": "2026-11-13",
+      "strike": 670.0,
+      "premium": 11.125,
+      "spot": 737.54,
+      "group": "near_miss",
+      "rejection_codes": [
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 641.69,
+      "min_close": 605.08,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.025649,
+      "annualized_realized": -0.312066,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-14|PYPL|2026-11-13|51.0": {
+      "run_date": "2026-10-14",
+      "ticker": "PYPL",
+      "expiration": "2026-11-13",
+      "strike": 51.0,
+      "premium": 0.8025,
+      "spot": 56.1,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 59.28,
+      "min_close": 54.99,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.015735,
+      "annualized_realized": 0.191446,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-14|LLY|2026-11-13|1095.0": {
+      "run_date": "2026-10-14",
+      "ticker": "LLY",
+      "expiration": "2026-11-13",
+      "strike": 1095.0,
+      "premium": 16.450000000000003,
+      "spot": 1208.74,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 1443.5,
+      "min_close": 1238.8365,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.015023,
+      "annualized_realized": 0.182778,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-14|COP|2026-11-13|127.0": {
+      "run_date": "2026-10-14",
+      "ticker": "COP",
+      "expiration": "2026-11-13",
+      "strike": 127.0,
+      "premium": 1.95,
+      "spot": 142.34,
+      "group": "near_miss",
+      "rejection_codes": [
+        "implied_move",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "quote_indicative",
+        "thin_call_side"
+      ],
+      "expiry_close": 142.28,
+      "min_close": 134.47,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.015354,
+      "annualized_realized": 0.186811,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-14|CSCO|2026-11-13|103.0": {
+      "run_date": "2026-10-14",
+      "ticker": "CSCO",
+      "expiration": "2026-11-13",
+      "strike": 103.0,
+      "premium": 1.63,
+      "spot": 113.64,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 95.64,
+      "min_close": 93.85,
+      "win": false,
+      "touched": true,
+      "realized_roc": -0.055631,
+      "annualized_realized": -0.676845,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-14|TMUS|2026-11-13|145.0": {
+      "run_date": "2026-10-14",
+      "ticker": "TMUS",
+      "expiration": "2026-11-13",
+      "strike": 145.0,
+      "premium": 2.125,
+      "spot": 157.79,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 169.95,
+      "min_close": 146.54,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.014655,
+      "annualized_realized": 0.178305,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-14|GM|2026-11-13|76.0": {
+      "run_date": "2026-10-14",
+      "ticker": "GM",
+      "expiration": "2026-11-13",
+      "strike": 76.0,
+      "premium": 1.0675,
+      "spot": 83.05,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 86.0,
+      "min_close": 75.92,
+      "win": true,
+      "touched": true,
+      "realized_roc": 0.014046,
+      "annualized_realized": 0.170894,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-14|CVS|2026-11-13|82.0": {
+      "run_date": "2026-10-14",
+      "ticker": "CVS",
+      "expiration": "2026-11-13",
+      "strike": 82.0,
+      "premium": 1.1125,
+      "spot": 90.39,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [],
+      "expiry_close": 89.35,
+      "min_close": 79.96,
+      "win": true,
+      "touched": true,
+      "realized_roc": 0.013567,
+      "annualized_realized": 0.165066,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-14|FDX|2026-11-13|265.0": {
+      "run_date": "2026-10-14",
+      "ticker": "FDX",
+      "expiration": "2026-11-13",
+      "strike": 265.0,
+      "premium": 3.3125,
+      "spot": 291.28,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "open_interest",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 324.14,
+      "min_close": 293.55,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.0125,
+      "annualized_realized": 0.152083,
+      "evaluated_at": "2026-11-17"
+    },
+    "2026-10-14|SBUX|2026-11-13|85.0": {
+      "run_date": "2026-10-14",
+      "ticker": "SBUX",
+      "expiration": "2026-11-13",
+      "strike": 85.0,
+      "premium": 1.08,
+      "spot": 93.25,
+      "group": "near_miss",
+      "rejection_codes": [
+        "spread",
+        "earnings"
+      ],
+      "flag_codes": [
+        "thin_call_side"
+      ],
+      "expiry_close": 106.44,
+      "min_close": 96.311,
+      "win": true,
+      "touched": false,
+      "realized_roc": 0.012706,
+      "annualized_realized": 0.154588,
+      "evaluated_at": "2026-11-17"
     }
   },
   "summary": {
     "candidates": {
-      "n": 559,
-      "wins": 466,
-      "win_rate": 0.8336,
-      "avg_realized_roc": 0.006823
+      "n": 573,
+      "wins": 473,
+      "win_rate": 0.8255,
+      "avg_realized_roc": 0.004064
     },
     "near_misses": {
-      "n": 1113,
-      "wins": 963,
-      "win_rate": 0.8652,
-      "avg_realized_roc": 0.009529
+      "n": 1193,
+      "wins": 1014,
+      "win_rate": 0.85,
+      "avg_realized_roc": 0.008019
     },
     "by_rejection_code": {
       "distance": {
@@ -34842,28 +36891,28 @@
         "avg_realized_roc": 0.006061
       },
       "earnings": {
-        "n": 813,
-        "wins": 695,
-        "win_rate": 0.8549,
-        "avg_realized_roc": 0.009432
+        "n": 889,
+        "wins": 742,
+        "win_rate": 0.8346,
+        "avg_realized_roc": 0.007387
       },
       "implied_move": {
-        "n": 427,
-        "wins": 374,
-        "win_rate": 0.8759,
-        "avg_realized_roc": 0.014241
+        "n": 449,
+        "wins": 382,
+        "win_rate": 0.8508,
+        "avg_realized_roc": 0.011393
       },
       "open_interest": {
-        "n": 521,
-        "wins": 464,
-        "win_rate": 0.8906,
-        "avg_realized_roc": 0.008957
+        "n": 569,
+        "wins": 499,
+        "win_rate": 0.877,
+        "avg_realized_roc": 0.006849
       },
       "spread": {
-        "n": 681,
-        "wins": 613,
-        "win_rate": 0.9001,
-        "avg_realized_roc": 0.010278
+        "n": 724,
+        "wins": 649,
+        "win_rate": 0.8964,
+        "avg_realized_roc": 0.009887
       },
       "yield_30dte": {
         "n": 3,
@@ -34886,16 +36935,16 @@
         "avg_realized_roc": 0.018289
       },
       "quote_indicative": {
-        "n": 43,
-        "wins": 40,
-        "win_rate": 0.9302,
-        "avg_realized_roc": 0.015096
+        "n": 45,
+        "wins": 42,
+        "win_rate": 0.9333,
+        "avg_realized_roc": 0.015085
       },
       "thin_call_side": {
-        "n": 492,
-        "wins": 430,
-        "win_rate": 0.874,
-        "avg_realized_roc": 0.005964
+        "n": 535,
+        "wins": 465,
+        "win_rate": 0.8692,
+        "avg_realized_roc": 0.005796
       }
     }
   }
