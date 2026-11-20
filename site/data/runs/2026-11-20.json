@@ -1,0 +1,105 @@
+{
+  "schema_version": 8,
+  "meta": {
+    "generated_at": "2026-11-20T23:13:03+00:00",
+    "run_date": "2026-11-20",
+    "candidate_count": 0,
+    "near_miss_count": 0,
+    "data_source": "yfinance",
+    "tickers_screened": [],
+    "breadth_evaluated": false,
+    "max_rows": 25,
+    "rejections_by_reason": {},
+    "flags_by_reason": {},
+    "contracts_evaluated": 0,
+    "contract_gate_failures": {},
+    "market_session": "closed",
+    "market_session_end": "closed",
+    "quotes_trusted": false
+  },
+  "regime": {
+    "light": "RED",
+    "tripped": [
+      "spy_below_200dma",
+      "vix_high_and_spy_falling"
+    ],
+    "signals": {
+      "spy_below_200dma": true,
+      "breadth_below_floor": false,
+      "vix_high_and_spy_falling": true
+    }
+  },
+  "header": {
+    "regime_light": "RED",
+    "regime_tripped": [
+      "spy_below_200dma",
+      "vix_high_and_spy_falling"
+    ],
+    "total_capital": 50000.0,
+    "capital_source": "config.yaml",
+    "deployed": 0.0,
+    "deployed_positions": 0.0,
+    "deployed_selections": 0.0,
+    "pct_deployed": 0.0,
+    "remaining_cash": 50000.0,
+    "positions_source": "greenfield (no positions.yaml)"
+  },
+  "thresholds": {
+    "dte": {
+      "target": 35,
+      "min": 30,
+      "max": 45,
+      "stretch_max": null
+    },
+    "delta": {
+      "target": 0.2,
+      "min": 0.15,
+      "max": 0.3
+    },
+    "scoring_mode": "risk_adjusted",
+    "premium_basis": "conservative",
+    "regime": {
+      "breadth_floor": 0.4,
+      "vix_high": 30.0,
+      "spy_falling_lookback": 5
+    },
+    "account": {
+      "total_capital": 50000,
+      "max_pct_per_name": 0.4,
+      "max_pct_per_sector": 0.25,
+      "max_pct_deployed": 0.5,
+      "require_affordable": false
+    },
+    "avoid_earnings_before_expiry": true,
+    "unknown_earnings_policy": "flag",
+    "quality": {
+      "min_yield_30dte": 0.005,
+      "max_implied_move": 0.15,
+      "max_spread_pct": 0.15,
+      "max_spread_abs": 0.1,
+      "min_open_interest": 50,
+      "min_distance_to_strike": 0.03,
+      "risk_free_rate": 0.04,
+      "score_denominator_floor": 0.01
+    },
+    "call_side": {
+      "enabled": true,
+      "target_delta": 0.25,
+      "min_open_interest": 10,
+      "max_spread_pct": 0.25,
+      "max_spread_abs": 0.15
+    },
+    "universe": {
+      "min_market_cap": 20000000000,
+      "min_avg_volume": 1000000,
+      "require_profitable": true,
+      "require_positive_fcf": true,
+      "require_options": true,
+      "allow_list": [],
+      "blacklist": [],
+      "blacklist_expired": []
+    }
+  },
+  "rows": [],
+  "near_misses": []
+}
